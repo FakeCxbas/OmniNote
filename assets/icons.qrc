@@ -1,5 +1,8 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
+    <qresource prefix="/icons">
+        <file alias="app_icon.svg">icons/org.omninote.OmniNote.svg</file>
+    </qresource>
     <qresource prefix="/icons/solar">
         <file alias="axes_2d.svg">icons/solar/axes_2d.svg</file>
         <file alias="axes_3d.svg">icons/solar/axes_3d.svg</file>

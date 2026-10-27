@@ -1,0 +1,47 @@
+# Maintainer: Sebastián Zambrano <sebastianzambrano2818@gmail.com>
+pkgname=omninote-git
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Cuaderno digital vectorial de alto rendimiento para apuntes STEM, matemáticas y ciencias con aceleración OpenGL"
+arch=('x86_64')
+url="https://github.com/FakeCxbas/OmniNote"
+license=('MIT')
+depends=(
+    'qt6-base'
+    'qt6-svg'
+    'poppler-qt6'
+    'sqlite'
+)
+makedepends=(
+    'cmake'
+    'git'
+    'pkgconf'
+)
+provides=('omninote')
+conflicts=('omninote')
+source=("git+https://github.com/FakeCxbas/OmniNote.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${srcdir}/OmniNote"
+    git describe --long --tags 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' || echo "1.0.0.r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "${srcdir}/OmniNote"
+    cmake -B build -S . \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build -j$(nproc)
+}
+
+check() {
+    cd "${srcdir}/OmniNote"
+    ./build/test_omninote
+}
+
+package() {
+    cd "${srcdir}/OmniNote"
+    DESTDIR="${pkgdir}" cmake --install build
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
