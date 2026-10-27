@@ -52,6 +52,7 @@ public:
     static QIcon get(IconType type, const QColor &color = QColor("#c0caf5"), int size = 20);
     static QPixmap getPixmap(IconType type, const QColor &color = QColor("#c0caf5"), int size = 20);
     static QString getSvgXml(IconType type, const QString &colorHex);
+    static QString getSolarSvgName(IconType type);
     static QString getIconFilename(IconType type);
 };
 
