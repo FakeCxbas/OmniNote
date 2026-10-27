@@ -96,7 +96,22 @@ bool GoogleDriveSyncService::importCredentialsJson(const QString &jsonFilePath) 
 }
 
 bool GoogleDriveSyncService::loadCredentials() {
-    QFile file(credentialsFilePath());
+    QString targetPath = credentialsFilePath();
+    if (!QFile::exists(targetPath)) {
+        QStringList candidates = {
+            QDir::homePath() + "/.config/OmniNote/OmniNote STEM Engine/gdrive_credentials.json",
+            QDir::homePath() + "/.config/OmniNote/OmniNoteSTEM/gdrive_credentials.json",
+            QDir::homePath() + "/.config/OmniNote/gdrive_credentials.json"
+        };
+        for (const auto &cand : candidates) {
+            if (QFile::exists(cand)) {
+                QFile::copy(cand, targetPath);
+                break;
+            }
+        }
+    }
+
+    QFile file(targetPath);
     if (!file.open(QIODevice::ReadOnly)) {
         return false;
     }
@@ -599,7 +614,86 @@ void GoogleDriveSyncService::uploadFile(const QString &localFilePath, const QStr
     });
 }
 
+void GoogleDriveSyncService::cleanLegacyRootItems(std::function<void(bool success, const QString &message)> callback) {
+    if (m_rootFolderId.isEmpty()) {
+        callback(true, "");
+        return;
+    }
+
+    ensureValidToken([this, callback](bool valid, const QString &err) {
+        if (!valid) {
+            callback(false, err);
+            return;
+        }
+
+        QString q = QString("'%1' in parents and trashed = false and (name = 'PDFs' or name = 'omninote_backup.db' or name = 'OmniNote_Apuntes.pdf')").arg(m_rootFolderId);
+
+        QUrl listUrl("https://www.googleapis.com/drive/v3/files");
+        QUrlQuery query;
+        query.addQueryItem("q", q);
+        query.addQueryItem("fields", "files(id, name)");
+        listUrl.setQuery(query);
+
+        QNetworkRequest listReq(listUrl);
+        listReq.setRawHeader("Authorization", "Bearer " + m_accessToken.toUtf8());
+
+        QNetworkReply *reply = m_netManager->get(listReq);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+            reply->deleteLater();
+            if (reply->error() != QNetworkReply::NoError) {
+                callback(false, reply->errorString());
+                return;
+            }
+
+            QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+            QJsonArray files = doc.object()["files"].toArray();
+
+            if (files.isEmpty()) {
+                callback(true, "");
+                return;
+            }
+
+            auto trashNext = std::make_shared<std::function<void(int)>>();
+            *trashNext = [this, files, trashNext, callback](int idx) {
+                if (idx >= files.size()) {
+                    callback(true, "Elementos heredados obsoletos limpiados.");
+                    return;
+                }
+
+                QString fileId = files[idx].toObject()["id"].toString();
+                QUrl trashUrl(QString("https://www.googleapis.com/drive/v3/files/%1").arg(fileId));
+                QNetworkRequest trashReq(trashUrl);
+                trashReq.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+                trashReq.setRawHeader("Authorization", "Bearer " + m_accessToken.toUtf8());
+
+                QJsonObject body;
+                body["trashed"] = true;
+
+                QNetworkReply *trashReply = m_netManager->sendCustomRequest(trashReq, "PATCH", QJsonDocument(body).toJson());
+                connect(trashReply, &QNetworkReply::finished, this, [trashReply, idx, trashNext]() {
+                    trashReply->deleteLater();
+                    (*trashNext)(idx + 1);
+                });
+            };
+
+            (*trashNext)(0);
+        });
+    });
+}
+
 void GoogleDriveSyncService::syncDatabase(const QString &dbFilePath, std::function<void(bool success, const QString &message)> callback) {
+    if (dbFilePath.trimmed().isEmpty() || !QFile::exists(dbFilePath)) {
+        findOrCreateFolder("OmniNote STEM", "", [this, callback](bool fOk, const QString &folderId, const QString &fErr) {
+            if (!fOk) {
+                callback(false, "Fallo al acceder a carpeta raíz: " + fErr);
+                return;
+            }
+            m_rootFolderId = folderId;
+            callback(true, "Carpeta raíz lista.");
+        });
+        return;
+    }
+
     emit syncProgress(10, "Localizando carpeta 'OmniNote STEM' en Google Drive...");
 
     findOrCreateFolder("OmniNote STEM", "", [this, dbFilePath, callback](bool fOk, const QString &folderId, const QString &fErr) {
@@ -609,16 +703,23 @@ void GoogleDriveSyncService::syncDatabase(const QString &dbFilePath, std::functi
         }
 
         m_rootFolderId = folderId;
-        emit syncProgress(40, "Subiendo snapshot de la base de datos (SQLite)...");
+        emit syncProgress(15, "Preparando respaldo de base de datos en .backup/...");
 
-        uploadFile(dbFilePath, "omninote_backup.db", "application/x-sqlite3", folderId, [this, callback](bool upOk, const QString &fileId, const QString &upErr) {
-            Q_UNUSED(fileId);
-            if (!upOk) {
-                callback(false, "Fallo al subir base de datos: " + upErr);
-            } else {
-                emit syncProgress(60, "Base de datos sincronizada con éxito.");
-                callback(true, "Base de datos respaldada correctamente en Google Drive.");
+        findOrCreateFolder(".backup", folderId, [this, dbFilePath, callback](bool bOk, const QString &backupFolderId, const QString &bErr) {
+            if (!bOk) {
+                callback(false, "Fallo al acceder a carpeta de respaldo: " + bErr);
+                return;
             }
+
+            uploadFile(dbFilePath, "omninote_backup.db", "application/x-sqlite3", backupFolderId, [this, callback](bool upOk, const QString &fileId, const QString &upErr) {
+                Q_UNUSED(fileId);
+                if (!upOk) {
+                    callback(false, "Fallo al subir base de datos: " + upErr);
+                } else {
+                    emit syncProgress(25, "Base de datos respaldada en .backup/.");
+                    callback(true, "Base de datos respaldada en .backup/.");
+                }
+            });
         });
     });
 }
@@ -711,59 +812,71 @@ void GoogleDriveSyncService::syncNotebookPages(const QString &dbFilePath,
                                               std::function<void(bool success, const QString &summary)> callback) {
     emit syncProgress(5, "Iniciando sincronización con Google Drive...");
 
-    syncDatabase(dbFilePath, [this, filesToSync, callback](bool dbOk, const QString &dbMsg) {
-        if (!dbOk) {
-            emit syncCompleted(false, dbMsg);
-            callback(false, dbMsg);
+    findOrCreateFolder("OmniNote STEM", "", [this, dbFilePath, filesToSync, callback](bool fOk, const QString &folderId, const QString &fErr) {
+        if (!fOk) {
+            emit syncCompleted(false, fErr);
+            callback(false, fErr);
             return;
         }
+        m_rootFolderId = folderId;
 
-        if (filesToSync.isEmpty()) {
-            m_lastSyncTime = QDateTime::currentDateTime();
-            saveCredentials();
-            emit syncProgress(100, "¡Sincronización completa!");
-            emit syncCompleted(true, "Base de datos SQLite respaldada en Google Drive.");
-            callback(true, "Base de datos respaldada con éxito.");
-            return;
-        }
-
-        emit syncProgress(25, QString("Preparando carpetas en Drive para %1 archivos...").arg(filesToSync.size()));
-
-        const int totalFiles = filesToSync.size();
-        auto uploadNext = std::make_shared<std::function<void(int, int)>>();
-
-        *uploadNext = [this, filesToSync, totalFiles, uploadNext, callback](int index, int successCount) {
-            if (index >= totalFiles) {
-                m_lastSyncTime = QDateTime::currentDateTime();
-                saveCredentials();
-                emit syncProgress(100, "¡Sincronización de páginas completa!");
-                QString summary = QString("Base de datos y %1 archivos sincronizados en Google Drive con éxito.").arg(successCount);
-                emit syncCompleted(true, summary);
-                callback(true, summary);
-                return;
-            }
-
-            const auto &item = filesToSync[index];
-            int pct = 25 + static_cast<int>(70.0 * (index + 1) / totalFiles);
-            emit syncProgress(pct, QString("Subiendo %1 (%2 de %3)...").arg(item.remoteFileName).arg(index + 1).arg(totalFiles));
-
-            resolveFolderPath(item.subfolderPath, m_rootFolderId, [this, item, index, totalFiles, successCount, uploadNext, callback](bool folderOk, const QString &folderId, const QString &folderErr) {
-                if (!folderOk) {
-                    emit syncProgress(25 + static_cast<int>(70.0 * (index + 1) / totalFiles),
-                                       QString("Advertencia: No se pudo resolver carpeta para %1: %2").arg(item.remoteFileName, folderErr));
-                    (*uploadNext)(index + 1, successCount);
+        // Clean legacy items from root so ONLY notebooks appear
+        cleanLegacyRootItems([this, dbFilePath, filesToSync, callback](bool /*cOk*/, const QString &/*cMsg*/) {
+            syncDatabase(dbFilePath, [this, filesToSync, callback](bool dbOk, const QString &dbMsg) {
+                if (!dbOk) {
+                    emit syncCompleted(false, dbMsg);
+                    callback(false, dbMsg);
                     return;
                 }
 
-                uploadFile(item.localFilePath, item.remoteFileName, item.mimeType, folderId, [this, index, successCount, uploadNext](bool upOk, const QString &fileId, const QString &upErr) {
-                    Q_UNUSED(fileId);
-                    Q_UNUSED(upErr);
-                    (*uploadNext)(index + 1, successCount + (upOk ? 1 : 0));
-                });
-            });
-        };
+                if (filesToSync.isEmpty()) {
+                    m_lastSyncTime = QDateTime::currentDateTime();
+                    saveCredentials();
+                    emit syncProgress(100, "¡Sincronización completa!");
+                    emit syncCompleted(true, "Sincronización finalizada.");
+                    callback(true, "Sincronización finalizada.");
+                    return;
+                }
 
-        (*uploadNext)(0, 0);
+                emit syncProgress(30, QString("Preparando carpetas de cuadernos para %1 archivos...").arg(filesToSync.size()));
+
+                const int totalFiles = filesToSync.size();
+                auto uploadNext = std::make_shared<std::function<void(int, int)>>();
+
+                *uploadNext = [this, filesToSync, totalFiles, uploadNext, callback](int index, int successCount) {
+                    if (index >= totalFiles) {
+                        m_lastSyncTime = QDateTime::currentDateTime();
+                        saveCredentials();
+                        emit syncProgress(100, "¡Sincronización de páginas completa!");
+                        QString summary = QString("%1 archivos de cuadernos sincronizados en Google Drive.").arg(successCount);
+                        emit syncCompleted(true, summary);
+                        callback(true, summary);
+                        return;
+                    }
+
+                    const auto &item = filesToSync[index];
+                    int pct = 30 + static_cast<int>(68.0 * (index + 1) / totalFiles);
+                    emit syncProgress(pct, QString("Subiendo %1/%2 (%3 de %4)...").arg(item.subfolderPath, item.remoteFileName).arg(index + 1).arg(totalFiles));
+
+                    resolveFolderPath(item.subfolderPath, m_rootFolderId, [this, item, index, totalFiles, successCount, uploadNext](bool folderOk, const QString &folderId, const QString &folderErr) {
+                        if (!folderOk) {
+                            emit syncProgress(30 + static_cast<int>(68.0 * (index + 1) / totalFiles),
+                                               QString("Advertencia: No se pudo resolver carpeta para %1: %2").arg(item.remoteFileName, folderErr));
+                            (*uploadNext)(index + 1, successCount);
+                            return;
+                        }
+
+                        uploadFile(item.localFilePath, item.remoteFileName, item.mimeType, folderId, [this, index, successCount, uploadNext](bool upOk, const QString &fileId, const QString &upErr) {
+                            Q_UNUSED(fileId);
+                            Q_UNUSED(upErr);
+                            (*uploadNext)(index + 1, successCount + (upOk ? 1 : 0));
+                        });
+                    });
+                };
+
+                (*uploadNext)(0, 0);
+            });
+        });
     });
 }
 
