@@ -1734,6 +1734,57 @@ void MainWindow::updatePointerTipDisplay(bool isEraser) {
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    // 1. Tablet Pad Events (e.g. Wacom CTH-480 ExpressKeys)
+    if (event->type() == QEvent::TabletPress) {
+        auto *te = static_cast<QTabletEvent *>(event);
+        const auto *dev = te->pointingDevice();
+        if (dev && (dev->type() == QInputDevice::DeviceType::TouchPad ||
+                    dev->type() == QInputDevice::DeviceType::Unknown ||
+                    dev->pointerType() == QPointingDevice::PointerType::Unknown ||
+                    dev->name().contains("Pad", Qt::CaseInsensitive))) {
+            if (te->buttons() & (Qt::LeftButton | Qt::BackButton)) {
+                if (m_currentScene) { m_currentScene->undoStack()->undo(); m_currentScene->update(); }
+                event->accept();
+                return true;
+            } else if (te->buttons() & (Qt::RightButton | Qt::ForwardButton)) {
+                if (m_currentScene) { m_currentScene->undoStack()->redo(); m_currentScene->update(); }
+                event->accept();
+                return true;
+            } else if (te->buttons() & (Qt::MiddleButton | Qt::ExtraButton1)) {
+                if (m_penAction) { m_penAction->setChecked(true); onToolTriggered(m_penAction); }
+                event->accept();
+                return true;
+            } else if (te->buttons() & Qt::ExtraButton2) {
+                if (m_eraserAction) { m_eraserAction->setChecked(true); onToolTriggered(m_eraserAction); }
+                event->accept();
+                return true;
+            }
+        }
+    }
+
+    // 2. Extra mouse buttons (Back / Forward / Extra buttons from mouse or tablet pad)
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::BackButton) {
+            if (m_currentScene) { m_currentScene->undoStack()->undo(); m_currentScene->update(); }
+            event->accept();
+            return true;
+        } else if (me->button() == Qt::ForwardButton) {
+            if (m_currentScene) { m_currentScene->undoStack()->redo(); m_currentScene->update(); }
+            event->accept();
+            return true;
+        } else if (me->button() == Qt::ExtraButton1) {
+            if (m_penAction) { m_penAction->setChecked(true); onToolTriggered(m_penAction); }
+            event->accept();
+            return true;
+        } else if (me->button() == Qt::ExtraButton2) {
+            if (m_eraserAction) { m_eraserAction->setChecked(true); onToolTriggered(m_eraserAction); }
+            event->accept();
+            return true;
+        }
+    }
+
+    // 3. Text editor focus and shortcut isolation
     if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
         QWidget *fw = QApplication::focusWidget();
         if (fw && (qobject_cast<QTextEdit *>(fw) ||
@@ -2256,6 +2307,21 @@ void MainWindow::showShortcutsGuide() {
     addRow(c3Layout, "F4", "Mostrar u ocultar la barra lateral de materias y páginas");
     addRow(c3Layout, "Esc", "Salir de la edición de texto y volver a dibujar");
     layout->addWidget(card3);
+
+    auto *card4 = new QFrame(dialog);
+    card4->setObjectName("Card");
+    auto *c4Layout = new QVBoxLayout(card4);
+    c4Layout->setSpacing(5);
+    auto *t4 = new QLabel("TABLETA WACOM (4 EXPRESSKEYS CTH-480):", card4);
+    t4->setStyleSheet("color: #7aa2f7; font-weight: bold; font-size: 10px;");
+    c4Layout->addWidget(t4);
+
+    addRow(c4Layout, "Botón Superior Izquierdo", "Deshacer último cambio (Ctrl+Z)");
+    addRow(c4Layout, "Botón Inferior Izquierdo", "Rehacer cambio deshecho (Ctrl+Y)");
+    addRow(c4Layout, "Botón Superior Derecho", "Seleccionar herramienta Lápiz (P)");
+    addRow(c4Layout, "Botón Inferior Derecho", "Seleccionar herramienta Borrador (E)");
+    addRow(c4Layout, "Botones de Lápiz Stylus", "Botón inferior: Borrador momentáneo | Botón superior: Lazo momentáneo");
+    layout->addWidget(card4);
 
     // Bottom
     auto *btnLayout = new QHBoxLayout();

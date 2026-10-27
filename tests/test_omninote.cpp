@@ -634,6 +634,76 @@ void testStrokeAutoImprovementAndDefaultColor() {
     qreal beautifiedH = maxBY - minBY;
     assert(beautifiedH >= origH * 0.85); // No shrinkage or collapsing of small exponent!
 
+    // 4c. Test Handwritten Number '4' Corner Preservation
+    QVector<StrokePoint> digitFourStroke;
+    for (int i = 0; i <= 10; ++i) {
+        digitFourStroke.append(StrokePoint(QPointF(100.0, 100.0 + i * 5.0), 0.5)); // Downward stroke
+    }
+    for (int i = 1; i <= 10; ++i) {
+        digitFourStroke.append(StrokePoint(QPointF(100.0 + i * 5.0, 150.0), 0.5)); // Horizontal stroke
+    }
+    QVector<bool> cornersFour = StrokeSmoother::detectCorners(digitFourStroke);
+    assert(cornersFour[10] == true); // Exact corner at (100, 150) detected!
+    QVector<StrokePoint> beautifiedFour = StrokeSmoother::beautifyStroke(digitFourStroke, true);
+    bool foundCornerFour = false;
+    for (const auto &p : beautifiedFour) {
+        if (std::abs(p.pos.x() - 100.0) <= 1.5 && std::abs(p.pos.y() - 150.0) <= 1.5) {
+            foundCornerFour = true;
+            break;
+        }
+    }
+    assert(foundCornerFour == true); // Corner of '4' never rounded or deformed!
+
+    // 4d. Test Mathematical Square Root (Radical) Symbol Preservation
+    QVector<StrokePoint> radicalStroke;
+    // Initial entry tick
+    radicalStroke.append(StrokePoint(QPointF(50.0, 120.0), 0.5));
+    radicalStroke.append(StrokePoint(QPointF(55.0, 125.0), 0.5));
+    // Descent to bottom valley (70, 170)
+    for (int i = 1; i <= 5; ++i) {
+        qreal t = (qreal)i / 5.0;
+        radicalStroke.append(StrokePoint(QPointF(55.0 + t * 15.0, 125.0 + t * 45.0), 0.5));
+    }
+    // Ascent to top crest (85, 90)
+    for (int i = 1; i <= 5; ++i) {
+        qreal t = (qreal)i / 5.0;
+        radicalStroke.append(StrokePoint(QPointF(70.0 + t * 15.0, 170.0 - t * 80.0), 0.5));
+    }
+    // Horizontal roof to (180, 90)
+    for (int i = 1; i <= 10; ++i) {
+        qreal t = (qreal)i / 10.0;
+        radicalStroke.append(StrokePoint(QPointF(85.0 + t * 95.0, 90.0), 0.5));
+    }
+    QVector<StrokePoint> snappedRadical;
+    bool snappedRadicalLine = StrokeSmoother::trySnapToGeometricShape(radicalStroke, snappedRadical);
+    assert(snappedRadicalLine == false); // Must NEVER snap square root gesture into a single line!
+
+    QVector<bool> cornersRadical = StrokeSmoother::detectCorners(radicalStroke);
+    bool hasValleyCorner = false;
+    bool hasCrestCorner = false;
+    for (int i = 0; i < radicalStroke.size(); ++i) {
+        if (cornersRadical[i]) {
+            if (std::abs(radicalStroke[i].pos.x() - 70.0) <= 2.0 && std::abs(radicalStroke[i].pos.y() - 170.0) <= 2.0) {
+                hasValleyCorner = true;
+            }
+            if (std::abs(radicalStroke[i].pos.x() - 85.0) <= 2.0 && std::abs(radicalStroke[i].pos.y() - 90.0) <= 2.0) {
+                hasCrestCorner = true;
+            }
+        }
+    }
+    assert(hasValleyCorner == true); // Bottom valley of radical detected!
+    assert(hasCrestCorner == true);  // Top crest of radical detected!
+
+    QVector<StrokePoint> beautifiedRadical = StrokeSmoother::beautifyStroke(radicalStroke, true);
+    qreal maxRadicalY = beautifiedRadical.first().pos.y();
+    qreal minRadicalY = beautifiedRadical.first().pos.y();
+    for (const auto &p : beautifiedRadical) {
+        maxRadicalY = std::max(maxRadicalY, p.pos.y());
+        minRadicalY = std::min(minRadicalY, p.pos.y());
+    }
+    assert(maxRadicalY >= 168.0); // Valley depth preserved, not pulled up by stabilizer!
+    assert(minRadicalY <= 92.0);  // Crest height preserved, not blunted!
+
     // 5. Test VectorCanvasScene drawing with Auto-Improvement enabled
     scene.handlePointerPress(QPointF(50, 50), 0.5, 0.0, 0.0, false);
     for (int i = 1; i <= 20; ++i) {
