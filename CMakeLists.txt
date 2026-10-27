@@ -75,6 +75,7 @@ set(SOURCES
     src/storage/SqliteStorage.cpp
     src/sync/GoogleDriveSync.hpp
     src/sync/GoogleDriveSync.cpp
+    assets/icons.qrc
 )
 
 add_executable(OmniNoteSTEM ${SOURCES})
@@ -119,6 +120,7 @@ set(TEST_SOURCES
     src/storage/SqliteStorage.cpp
     src/pdf/PdfManager.cpp
     src/sync/GoogleDriveSync.cpp
+    assets/icons.qrc
 )
 
 add_executable(test_omninote ${TEST_SOURCES})

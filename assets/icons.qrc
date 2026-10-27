@@ -1,0 +1,42 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons/3d">
+        <file alias="axes_2d.png">icons/3d/axes_2d.png</file>
+        <file alias="axes_3d.png">icons/3d/axes_3d.png</file>
+        <file alias="check.png">icons/3d/check.png</file>
+        <file alias="circle_shape.png">icons/3d/circle_shape.png</file>
+        <file alias="close.png">icons/3d/close.png</file>
+        <file alias="cloud.png">icons/3d/cloud.png</file>
+        <file alias="code.png">icons/3d/code.png</file>
+        <file alias="copy.png">icons/3d/copy.png</file>
+        <file alias="duplicate.png">icons/3d/duplicate.png</file>
+        <file alias="edit.png">icons/3d/edit.png</file>
+        <file alias="eraser.png">icons/3d/eraser.png</file>
+        <file alias="export_pdf.png">icons/3d/export_pdf.png</file>
+        <file alias="folder.png">icons/3d/folder.png</file>
+        <file alias="formula.png">icons/3d/formula.png</file>
+        <file alias="help.png">icons/3d/help.png</file>
+        <file alias="highlighter.png">icons/3d/highlighter.png</file>
+        <file alias="image.png">icons/3d/image.png</file>
+        <file alias="import_pdf.png">icons/3d/import_pdf.png</file>
+        <file alias="lasso.png">icons/3d/lasso.png</file>
+        <file alias="notebook.png">icons/3d/notebook.png</file>
+        <file alias="page.png">icons/3d/page.png</file>
+        <file alias="palette.png">icons/3d/palette.png</file>
+        <file alias="panel.png">icons/3d/panel.png</file>
+        <file alias="pen.png">icons/3d/pen.png</file>
+        <file alias="plot.png">icons/3d/plot.png</file>
+        <file alias="plus.png">icons/3d/plus.png</file>
+        <file alias="rect_shape.png">icons/3d/rect_shape.png</file>
+        <file alias="redo.png">icons/3d/redo.png</file>
+        <file alias="restore.png">icons/3d/restore.png</file>
+        <file alias="ruler.png">icons/3d/ruler.png</file>
+        <file alias="save.png">icons/3d/save.png</file>
+        <file alias="shapes.png">icons/3d/shapes.png</file>
+        <file alias="sparkles.png">icons/3d/sparkles.png</file>
+        <file alias="straight_line.png">icons/3d/straight_line.png</file>
+        <file alias="text.png">icons/3d/text.png</file>
+        <file alias="trash.png">icons/3d/trash.png</file>
+        <file alias="undo.png">icons/3d/undo.png</file>
+    </qresource>
+</RCC>

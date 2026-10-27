@@ -27,5 +27,17 @@ int main(int argc, char *argv[]) {
     OmniNote::MainWindow mainWindow;
     mainWindow.show();
 
+    if (app.arguments().contains("--screenshot")) {
+        int idx = app.arguments().indexOf("--screenshot");
+        QString path = (idx + 1 < app.arguments().size()) ? app.arguments().at(idx + 1) : "omninote_preview.png";
+        mainWindow.resize(1280, 800);
+        mainWindow.show();
+        QApplication::processEvents();
+        QPixmap shot = mainWindow.grab();
+        shot.save(path);
+        return 0;
+    }
+
     return app.exec();
 }
+

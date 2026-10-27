@@ -2,6 +2,8 @@
 #include <QSvgRenderer>
 #include <QPainter>
 #include <QHash>
+#include <QFile>
+#include <QCoreApplication>
 
 namespace OmniNote {
 
@@ -128,35 +130,127 @@ QString AppIcons::getSvgXml(IconType type, const QString &colorHex) {
     ).arg(colorHex, pathData);
 }
 
+QString AppIcons::getIconFilename(IconType type) {
+    switch (type) {
+    case IconType::Panel: return "panel.png";
+    case IconType::Undo: return "undo.png";
+    case IconType::Redo: return "redo.png";
+    case IconType::Pen: return "pen.png";
+    case IconType::Highlighter: return "highlighter.png";
+    case IconType::Eraser: return "eraser.png";
+    case IconType::Lasso: return "lasso.png";
+    case IconType::Shapes: return "shapes.png";
+    case IconType::StraightLine: return "straight_line.png";
+    case IconType::Axes2D: return "axes_2d.png";
+    case IconType::Axes3D: return "axes_3d.png";
+    case IconType::RectShape: return "rect_shape.png";
+    case IconType::CircleShape: return "circle_shape.png";
+    case IconType::Ruler: return "ruler.png";
+    case IconType::Sparkles: return "sparkles.png";
+    case IconType::Text: return "text.png";
+    case IconType::Code: return "code.png";
+    case IconType::Plot: return "plot.png";
+    case IconType::Image: return "image.png";
+    case IconType::Formula: return "formula.png";
+    case IconType::Palette: return "palette.png";
+    case IconType::ImportPdf: return "import_pdf.png";
+    case IconType::ExportPdf: return "export_pdf.png";
+    case IconType::Save: return "save.png";
+    case IconType::Duplicate: return "duplicate.png";
+    case IconType::Trash: return "trash.png";
+    case IconType::Close: return "close.png";
+    case IconType::Check: return "check.png";
+    case IconType::Folder: return "folder.png";
+    case IconType::Notebook: return "notebook.png";
+    case IconType::Page: return "page.png";
+    case IconType::Plus: return "plus.png";
+    case IconType::Restore: return "restore.png";
+    case IconType::Edit: return "edit.png";
+    case IconType::Copy: return "copy.png";
+    case IconType::Cloud: return "cloud.png";
+    case IconType::Help: return "help.png";
+    }
+    return QString();
+}
+
 QPixmap AppIcons::getPixmap(IconType type, const QColor &color, int size) {
-    QString svg = getSvgXml(type, color.name());
-    QSvgRenderer renderer(svg.toUtf8());
+    static QHash<quint64, QPixmap> pixmapCache;
+    quint64 cacheKey = (static_cast<quint64>(type) << 32) | static_cast<quint32>(size);
+    if (pixmapCache.contains(cacheKey)) {
+        return pixmapCache.value(cacheKey);
+    }
 
-    const int scale = 2; // High-DPI support
-    QPixmap pixmap(size * scale, size * scale);
-    pixmap.setDevicePixelRatio(scale);
-    pixmap.fill(Qt::transparent);
+    QString filename = getIconFilename(type);
+    QPixmap basePixmap;
 
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    renderer.render(&painter, QRectF(0.0, 0.0, size, size));
-    painter.end();
+    // 1. Try Qt Resource System
+    if (!filename.isEmpty()) {
+        QString qrcPath = QString(":/icons/3d/%1").arg(filename);
+        if (QFile::exists(qrcPath)) {
+            basePixmap.load(qrcPath);
+        }
+    }
 
-    return pixmap;
+    // 2. Try filesystem paths
+    if (basePixmap.isNull() && !filename.isEmpty()) {
+        const QStringList candidatePaths = {
+            QString("assets/icons/3d/%1").arg(filename),
+            QString("../assets/icons/3d/%1").arg(filename),
+            QCoreApplication::applicationDirPath() + QString("/../assets/icons/3d/%1").arg(filename),
+            QCoreApplication::applicationDirPath() + QString("/assets/icons/3d/%1").arg(filename)
+        };
+        for (const auto &p : candidatePaths) {
+            if (QFile::exists(p)) {
+                basePixmap.load(p);
+                if (!basePixmap.isNull()) break;
+            }
+        }
+    }
+
+    // 3. Fallback to vector SVG if PNG not found
+    if (basePixmap.isNull()) {
+        QString svg = getSvgXml(type, color.name());
+        QSvgRenderer renderer(svg.toUtf8());
+
+        const int scale = 2; // High-DPI support
+        QPixmap pixmap(size * scale, size * scale);
+        pixmap.setDevicePixelRatio(scale);
+        pixmap.fill(Qt::transparent);
+
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        renderer.render(&painter, QRectF(0.0, 0.0, size, size));
+        painter.end();
+        pixmapCache.insert(cacheKey, pixmap);
+        return pixmap;
+    }
+
+    const int scale = 2;
+    int targetPx = size * scale;
+    QPixmap scaled = basePixmap.scaled(targetPx, targetPx, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    scaled.setDevicePixelRatio(scale);
+    pixmapCache.insert(cacheKey, scaled);
+    return scaled;
 }
 
 QIcon AppIcons::get(IconType type, const QColor &color, int size) {
     QIcon icon;
-    // Normal / Inactive state
-    icon.addPixmap(getPixmap(type, color, size), QIcon::Normal, QIcon::Off);
-    // Hover state (bright white)
-    icon.addPixmap(getPixmap(type, QColor("#ffffff"), size), QIcon::Active, QIcon::Off);
-    // Checked / Selected state (pure bright white against active blue background)
-    icon.addPixmap(getPixmap(type, QColor("#ffffff"), size), QIcon::Normal, QIcon::On);
-    icon.addPixmap(getPixmap(type, QColor("#ffffff"), size), QIcon::Active, QIcon::On);
-    // Disabled state
-    icon.addPixmap(getPixmap(type, QColor("#565f89"), size), QIcon::Disabled, QIcon::Off);
+    QPixmap normalPx = getPixmap(type, color, size);
+    icon.addPixmap(normalPx, QIcon::Normal, QIcon::Off);
+    icon.addPixmap(normalPx, QIcon::Active, QIcon::Off);
+    icon.addPixmap(normalPx, QIcon::Normal, QIcon::On);
+    icon.addPixmap(normalPx, QIcon::Active, QIcon::On);
+
+    QPixmap dim(normalPx.size());
+    dim.fill(Qt::transparent);
+    QPainter p(&dim);
+    p.setOpacity(0.35);
+    p.drawPixmap(0, 0, normalPx);
+    p.end();
+    dim.setDevicePixelRatio(normalPx.devicePixelRatio());
+    icon.addPixmap(dim, QIcon::Disabled, QIcon::Off);
+
     return icon;
 }
 
