@@ -58,6 +58,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_autoSaveTimer, &QTimer::timeout, this, &MainWindow::onPeriodicAutoSave);
     m_autoSaveTimer->start();
 
+    // Debounced automatic background sync timer for modified pages to Google Drive
+    m_driveAutoSyncDebounceTimer = new QTimer(this);
+    m_driveAutoSyncDebounceTimer->setSingleShot(true);
+    connect(m_driveAutoSyncDebounceTimer, &QTimer::timeout, this, &MainWindow::triggerNextPendingDriveSync);
+
     setupUI();
     setupToolbars();
     setupSidebar();
@@ -1242,15 +1247,127 @@ void MainWindow::onSaveCurrentPage() {
     m_currentScene->undoStack()->setClean();
     m_hasUnsavedChanges = false;
 
-    QSettings settings("OmniNote", "OmniNoteSTEM");
-    bool autoSync = settings.value("cloud_auto_sync", true).toBool();
-    if (autoSync) {
-        syncToLocalCloudFolder(false);
+    if (m_saveStatusLabel) {
+        m_saveStatusLabel->setText("Guardado");
+    }
+
+    // Incremental background auto-save to Google Drive for the modified page
+    if (m_driveSyncService && m_driveSyncService->isConnected()) {
+        scheduleBackgroundDrivePageSync(m_currentNotebookId, m_currentPageId);
+    }
+}
+
+void MainWindow::scheduleBackgroundDrivePageSync(qint64 notebookId, qint64 pageId) {
+    if (!m_driveSyncService || !m_driveSyncService->isConnected()) return;
+    if (pageId <= 0) return;
+
+    int pageNum = m_storage.getPageNumber(pageId);
+    QString rawTitle = m_storage.getNotebookTitle(notebookId);
+    if (rawTitle.isEmpty()) {
+        rawTitle = "Apuntes";
+    }
+
+    auto sanitizeName = [](const QString &name) -> QString {
+        QString clean = name;
+        clean.replace('/', '_').replace('\\', '_').replace(':', '_')
+             .replace('*', '_').replace('?', '_').replace('"', '_')
+             .replace('<', '_').replace('>', '_').replace('|', '_');
+        clean = clean.trimmed();
+        return clean.isEmpty() ? "Apuntes" : clean;
+    };
+
+    QString cleanTitle = sanitizeName(rawTitle);
+
+    PendingDriveSyncEntry entry;
+    entry.notebookId = notebookId;
+    entry.pageId = pageId;
+    entry.pageNumber = pageNum;
+    entry.notebookTitle = cleanTitle;
+
+    m_pendingDriveSyncs[pageId] = entry;
+
+    if (m_saveStatusLabel) {
+        m_saveStatusLabel->setText(QString("Guardado local • Sincronizando %1 / Hoja %2 en segundo plano...").arg(cleanTitle).arg(pageNum));
+    }
+
+    // Debounce background sync: Wait 1.5 seconds after saving before uploading to prevent network flooding
+    if (m_driveAutoSyncDebounceTimer) {
+        m_driveAutoSyncDebounceTimer->start(1500);
+    }
+}
+
+void MainWindow::triggerNextPendingDriveSync() {
+    if (!m_driveSyncService || !m_driveSyncService->isConnected()) {
+        m_pendingDriveSyncs.clear();
+        m_isSyncingDrivePage = false;
+        return;
+    }
+
+    if (m_isSyncingDrivePage || m_pendingDriveSyncs.isEmpty()) {
+        return;
+    }
+
+    auto it = m_pendingDriveSyncs.begin();
+    PendingDriveSyncEntry pending = it.value();
+    m_pendingDriveSyncs.erase(it);
+
+    m_isSyncingDrivePage = true;
+
+    QString tempDir = QDir::tempPath() + "/OmniNote_AutoSync/" + pending.notebookTitle;
+    QDir().mkpath(tempDir);
+    QString pageFileName = QString("Hoja %1.pdf").arg(pending.pageNumber);
+    QString localPdfPath = tempDir + "/" + pageFileName;
+
+    // Render the page to PDF
+    bool exportOk = false;
+    if (pending.pageId == m_currentPageId && m_currentScene) {
+        exportOk = PdfManager::exportNotebookToPdf(localPdfPath, {m_currentScene}, 300);
     } else {
-        if (m_saveStatusLabel) {
-            m_saveStatusLabel->setText("Guardado");
+        auto pages = m_storage.getPages(pending.notebookId);
+        PageRecord targetPage;
+        for (const auto &p : pages) {
+            if (p.id == pending.pageId) {
+                targetPage = p;
+                break;
+            }
+        }
+        if (targetPage.id > 0) {
+            auto scene = createSceneForPage(targetPage);
+            exportOk = PdfManager::exportNotebookToPdf(localPdfPath, {scene.get()}, 300);
         }
     }
+
+    if (!exportOk || !QFile::exists(localPdfPath)) {
+        m_isSyncingDrivePage = false;
+        if (!m_pendingDriveSyncs.isEmpty()) {
+            triggerNextPendingDriveSync();
+        }
+        return;
+    }
+
+    GoogleDriveSyncService::SyncFileEntry fileEntry;
+    fileEntry.localFilePath = localPdfPath;
+    fileEntry.remoteFileName = pageFileName;
+    fileEntry.subfolderPath = pending.notebookTitle;
+    fileEntry.mimeType = "application/pdf";
+
+    m_driveSyncService->syncSingleFile(fileEntry, [this, pending, pageFileName](bool success, const QString &err) {
+        m_isSyncingDrivePage = false;
+        if (success) {
+            if (m_saveStatusLabel) {
+                m_saveStatusLabel->setText(QString("✓ Guardado en Google Drive (%1 - %2)").arg(pending.notebookTitle, pageFileName));
+            }
+        } else {
+            if (m_saveStatusLabel) {
+                m_saveStatusLabel->setText("Guardado local (Google Drive: " + err + ")");
+            }
+        }
+
+        // Process any other pending pages that were queued
+        if (!m_pendingDriveSyncs.isEmpty()) {
+            triggerNextPendingDriveSync();
+        }
+    });
 }
 
 void MainWindow::syncToLocalCloudFolder(bool notifyUser) {
@@ -1923,7 +2040,7 @@ void MainWindow::showCloudSyncDialog() {
     titleLabel->setStyleSheet("font-size: 14.5px; font-weight: bold; color: #7aa2f7;");
     titleLayout->addWidget(titleLabel);
 
-    auto *subTitleLabel = new QLabel("Respaldo dual: libreta completa SQLite y exportación vectorial continua en PDF", dialog);
+    auto *subTitleLabel = new QLabel("Guardado automático de cambios en segundo plano y exportación de páginas PDF", dialog);
     subTitleLabel->setStyleSheet("font-size: 11px; color: #565f89;");
     titleLayout->addWidget(subTitleLabel);
 
@@ -1957,11 +2074,12 @@ void MainWindow::showCloudSyncDialog() {
     connectBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 12px; padding: 8px 18px; }");
     actionBtnsLayout->addWidget(connectBtn);
 
-    auto *syncNowBtn = new QPushButton("  Sincronizar a Google Drive (DB + PDF)", googleCard);
+    auto *syncNowBtn = new QPushButton("  Sincronizar todo ahora (Opcional)", googleCard);
     syncNowBtn->setObjectName("ActionBtn");
     syncNowBtn->setIcon(AppIcons::get(AppIcons::IconType::Cloud, QColor("#15161e"), 16));
     syncNowBtn->setCursor(Qt::PointingHandCursor);
     syncNowBtn->setMinimumHeight(34);
+    syncNowBtn->setToolTip("Tus cambios ya se guardan automáticamente. Este botón sincroniza todos los cuadernos existentes.");
     actionBtnsLayout->addWidget(syncNowBtn);
 
     auto *disconnectBtn = new QPushButton("Desconectar Cuenta", googleCard);
@@ -1981,7 +2099,7 @@ void MainWindow::showCloudSyncDialog() {
     gcLayout->addWidget(progressBar);
 
     // Status message label
-    auto *statusLabel = new QLabel("Listo para sincronizar con Google.", googleCard);
+    auto *statusLabel = new QLabel("Listo: tus notas se sincronizan automáticamente al escribir o guardar.", googleCard);
     statusLabel->setStyleSheet("color: #7dcfff; font-size: 11px;");
     statusLabel->setWordWrap(true);
     gcLayout->addWidget(statusLabel);
@@ -2079,7 +2197,7 @@ void MainWindow::showCloudSyncDialog() {
     auto updateUiState = [=, this]() {
         bool connected = m_driveSyncService->isConnected();
         if (connected) {
-            badgeLabel->setText("● ESTADO: CONECTADO CON GOOGLE DRIVE");
+            badgeLabel->setText("● ESTADO: GUARDADO AUTOMÁTICO ACTIVO EN GOOGLE DRIVE");
             badgeLabel->setStyleSheet("color: #9ece6a; font-size: 11.5px; font-weight: bold;");
 
             QString lastSyncStr = m_driveSyncService->lastSyncTime().isValid()
@@ -2089,6 +2207,7 @@ void MainWindow::showCloudSyncDialog() {
             accountInfoLabel->setText(
                 QString("<b>Cuenta vinculada:</b> %1<br>"
                         "<b>Destino en la Nube:</b> Carpeta 'OmniNote STEM' en Google Drive<br>"
+                        "<b>Modo continuo:</b> Los cambios en tus apuntes se guardan automáticamente en Drive en segundo plano.<br>"
                         "<b>Última sincronización:</b> %2")
                 .arg(m_driveSyncService->userEmail().isEmpty() ? "Usuario Google autenticado" : m_driveSyncService->userEmail(), lastSyncStr)
             );

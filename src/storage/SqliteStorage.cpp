@@ -248,6 +248,22 @@ bool SqliteStorage::deleteNotebook(qint64 notebookId) {
     return ok;
 }
 
+QString SqliteStorage::getNotebookTitle(qint64 notebookId) {
+    if (!m_db || notebookId <= 0) return QString();
+    const char *sql = "SELECT title FROM Notebooks WHERE id = ?;";
+    sqlite3_stmt *stmt = nullptr;
+    QString title;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int64(stmt, 1, notebookId);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char *t = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+            if (t) title = QString::fromUtf8(t);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return title;
+}
+
 QVector<PageRecord> SqliteStorage::getPages(qint64 notebookId) {
     QVector<PageRecord> result;
     if (!m_db) return result;
@@ -380,6 +396,21 @@ bool SqliteStorage::deletePage(qint64 pageId) {
     }
 
     return commitTransaction();
+}
+
+int SqliteStorage::getPageNumber(qint64 pageId) {
+    if (!m_db || pageId <= 0) return 1;
+    const char *sql = "SELECT page_number FROM Pages WHERE id = ?;";
+    sqlite3_stmt *stmt = nullptr;
+    int pageNum = 1;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int64(stmt, 1, pageId);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            pageNum = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return pageNum;
 }
 
 bool SqliteStorage::savePageData(qint64 pageId, const QVector<StrokeRecord> &strokes, const QVector<StemBlockRecord> &blocks) {

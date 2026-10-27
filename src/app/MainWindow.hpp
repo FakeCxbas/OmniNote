@@ -96,6 +96,8 @@ private:
     void markModified();
     void ensureActivePageForSave();
     void syncToLocalCloudFolder(bool notifyUser = false);
+    void scheduleBackgroundDrivePageSync(qint64 notebookId, qint64 pageId);
+    void triggerNextPendingDriveSync();
     std::unique_ptr<VectorCanvasScene> createSceneForPage(const PageRecord &p);
     QVector<GoogleDriveSyncService::SyncFileEntry> prepareNotebookExportFiles(const QString &targetDir);
 
@@ -150,6 +152,15 @@ private:
     QAction *m_helpAction{nullptr};
     class VirtualRulerItem *m_virtualRuler{nullptr};
     GoogleDriveSyncService *m_driveSyncService{nullptr};
+    struct PendingDriveSyncEntry {
+        qint64 notebookId{0};
+        qint64 pageId{0};
+        int pageNumber{1};
+        QString notebookTitle;
+    };
+    QMap<qint64, PendingDriveSyncEntry> m_pendingDriveSyncs;
+    QTimer *m_driveAutoSyncDebounceTimer{nullptr};
+    bool m_isSyncingDrivePage{false};
 
     QComboBox *m_shapeCombo{nullptr};
     QComboBox *m_gridCombo{nullptr};

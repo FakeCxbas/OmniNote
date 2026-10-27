@@ -170,6 +170,7 @@ void GoogleDriveSyncService::disconnectAccount() {
     m_userEmail.clear();
     m_rootFolderId.clear();
     m_folderCache.clear();
+    m_fileIdCache.clear();
     saveCredentials();
     emit syncStatusChanged("Cuenta desconectada de Google Drive.");
 }
@@ -526,6 +527,28 @@ void GoogleDriveSyncService::uploadFile(const QString &localFilePath, const QStr
         QByteArray fileContent = file.readAll();
         file.close();
 
+        QString cacheKey = QString("%1/%2").arg(parentFolderId, remoteFileName);
+        if (m_fileIdCache.contains(cacheKey)) {
+            QString cachedId = m_fileIdCache.value(cacheKey);
+            QUrl updateUrl(QString("https://www.googleapis.com/upload/drive/v3/files/%1?uploadType=media").arg(cachedId));
+            QNetworkRequest patchReq(updateUrl);
+            patchReq.setHeader(QNetworkRequest::ContentTypeHeader, mimeType);
+            patchReq.setRawHeader("Authorization", "Bearer " + m_accessToken.toUtf8());
+
+            QNetworkReply *patchReply = m_netManager->sendCustomRequest(patchReq, "PATCH", fileContent);
+            connect(patchReply, &QNetworkReply::finished, this, [this, patchReply, cachedId, cacheKey, localFilePath, remoteFileName, mimeType, parentFolderId, callback]() {
+                patchReply->deleteLater();
+                if (patchReply->error() == QNetworkReply::NoError) {
+                    callback(true, cachedId, "");
+                } else {
+                    // Stale cache entry, clear and re-query
+                    m_fileIdCache.remove(cacheKey);
+                    uploadFile(localFilePath, remoteFileName, mimeType, parentFolderId, callback);
+                }
+            });
+            return;
+        }
+
         // 1. Check if file already exists in parent folder
         QString q = QString("name = '%1' and trashed = false").arg(remoteFileName);
         if (!parentFolderId.isEmpty()) {
@@ -542,7 +565,7 @@ void GoogleDriveSyncService::uploadFile(const QString &localFilePath, const QStr
         listReq.setRawHeader("Authorization", "Bearer " + m_accessToken.toUtf8());
 
         QNetworkReply *listReply = m_netManager->get(listReq);
-        connect(listReply, &QNetworkReply::finished, this, [this, listReply, fileContent, remoteFileName, mimeType, parentFolderId, callback]() {
+        connect(listReply, &QNetworkReply::finished, this, [this, listReply, fileContent, remoteFileName, mimeType, parentFolderId, cacheKey, callback]() {
             listReply->deleteLater();
             if (listReply->error() != QNetworkReply::NoError) {
                 callback(false, "", QString("Error al consultar archivo: %1").arg(listReply->errorString()));
@@ -555,6 +578,7 @@ void GoogleDriveSyncService::uploadFile(const QString &localFilePath, const QStr
             if (!files.isEmpty()) {
                 // Update existing file in-place (PATCH)
                 QString existingId = files.first().toObject()["id"].toString();
+                m_fileIdCache[cacheKey] = existingId;
                 QUrl updateUrl(QString("https://www.googleapis.com/upload/drive/v3/files/%1?uploadType=media").arg(existingId));
                 QNetworkRequest patchReq(updateUrl);
                 patchReq.setHeader(QNetworkRequest::ContentTypeHeader, mimeType);
@@ -599,7 +623,7 @@ void GoogleDriveSyncService::uploadFile(const QString &localFilePath, const QStr
                 QNetworkReply *uploadReply = m_netManager->post(uploadReq, multiPart);
                 multiPart->setParent(uploadReply); // multiPart deleted with reply
 
-                connect(uploadReply, &QNetworkReply::finished, this, [uploadReply, callback]() {
+                connect(uploadReply, &QNetworkReply::finished, this, [this, uploadReply, cacheKey, callback]() {
                     uploadReply->deleteLater();
                     if (uploadReply->error() != QNetworkReply::NoError) {
                         callback(false, "", QString("Error al subir archivo: %1").arg(uploadReply->errorString()));
@@ -607,6 +631,7 @@ void GoogleDriveSyncService::uploadFile(const QString &localFilePath, const QStr
                     }
                     QJsonDocument resDoc = QJsonDocument::fromJson(uploadReply->readAll());
                     QString newId = resDoc.object()["id"].toString();
+                    m_fileIdCache[cacheKey] = newId;
                     callback(true, newId, "");
                 });
             }
@@ -891,6 +916,44 @@ void GoogleDriveSyncService::syncAll(const QString &dbFilePath, const QString &p
         files.append(entry);
     }
     syncNotebookPages(dbFilePath, files, callback);
+}
+
+void GoogleDriveSyncService::syncSingleFile(const SyncFileEntry &fileEntry, std::function<void(bool success, const QString &error)> callback) {
+    if (!isConnected()) {
+        if (callback) callback(false, "No conectado a Google Drive");
+        return;
+    }
+
+    ensureValidToken([this, fileEntry, callback](bool valid, const QString &err) {
+        if (!valid) {
+            if (callback) callback(false, err);
+            return;
+        }
+
+        findOrCreateFolder("OmniNote STEM", "", [this, fileEntry, callback](bool fOk, const QString &rootFolderId, const QString &fErr) {
+            if (!fOk) {
+                if (callback) callback(false, fErr);
+                return;
+            }
+            m_rootFolderId = rootFolderId;
+
+            resolveFolderPath(fileEntry.subfolderPath, m_rootFolderId, [this, fileEntry, callback](bool folderOk, const QString &targetFolderId, const QString &folderErr) {
+                if (!folderOk) {
+                    if (callback) callback(false, folderErr);
+                    return;
+                }
+
+                uploadFile(fileEntry.localFilePath, fileEntry.remoteFileName, fileEntry.mimeType, targetFolderId, [this, callback](bool upOk, const QString &fileId, const QString &upErr) {
+                    Q_UNUSED(fileId);
+                    if (upOk) {
+                        m_lastSyncTime = QDateTime::currentDateTime();
+                        saveCredentials();
+                    }
+                    if (callback) callback(upOk, upErr);
+                });
+            });
+        });
+    });
 }
 
 } // namespace OmniNote
