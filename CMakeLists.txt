@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(GNUInstallDirs)
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
@@ -100,6 +102,29 @@ target_link_libraries(OmniNoteSTEM PRIVATE
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(OmniNoteSTEM PRIVATE -Wall -Wextra -pedantic)
 endif()
+
+set_target_properties(OmniNoteSTEM PROPERTIES
+    OUTPUT_NAME omninote
+)
+
+# Desktop Deployment & Installation Rules
+install(TARGETS OmniNoteSTEM
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(FILES assets/org.omninote.OmniNote.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+)
+
+install(FILES assets/icons/org.omninote.OmniNote.svg
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+)
+
+foreach(size 16 24 32 48 64 128 256 512)
+    install(FILES assets/icons/hicolor/${size}x${size}/apps/org.omninote.OmniNote.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
+    )
+endforeach()
 
 # Automated Subsystem Test Suite
 set(TEST_SOURCES

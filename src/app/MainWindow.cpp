@@ -45,6 +45,7 @@ namespace OmniNote {
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("OmniNote STEM Engine — High-Performance Native Engineering Notes");
+    setWindowIcon(QIcon(":/icons/app_icon.svg"));
     resize(1360, 860);
     setStyleSheet(ThemeManager::getDarkBlueTokyoNightStyle());
 

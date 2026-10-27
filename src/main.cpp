@@ -15,10 +15,13 @@ int main(int argc, char *argv[]) {
     QSurfaceFormat::setDefaultFormat(format);
 
     QApplication app(argc, argv);
-    app.setApplicationName("OmniNote STEM Engine");
+    app.setApplicationName("OmniNote");
+    app.setApplicationDisplayName("OmniNote STEM");
     app.setApplicationVersion("1.0.0");
     app.setOrganizationName("OmniNote");
     app.setOrganizationDomain("omninote.org");
+    app.setDesktopFileName("org.omninote.OmniNote");
+    app.setWindowIcon(QIcon(":/icons/app_icon.svg"));
 
     // Install global tablet event filter for low-latency Wacom tablet tracking
     auto *tabletFilter = new OmniNote::TabletEventFilter(&app);

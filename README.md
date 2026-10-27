@@ -123,10 +123,33 @@ Para ejecutar la suite de pruebas unitarias automatizadas:
 ./build/test_omninote
 ```
 
-### Ejecución
+### Instalación como Aplicación de Escritorio
+
+Para instalar OmniNote con integración nativa en el sistema (icono de alta resolución, entrada `.desktop` y lanzador de aplicaciones sin necesidad de terminal ni permisos de superusuario):
 
 ```bash
-./build/OmniNoteSTEM
+./scripts/install.sh
+```
+
+Una vez instalado, puedes iniciarlo desde tu menú de aplicaciones (Rofi, Wofi, GNOME, KDE, Hyprland) o escribiendo en la terminal:
+
+```bash
+omninote
+```
+
+Para desinstalarlo:
+
+```bash
+./scripts/uninstall.sh
+```
+
+### Empaquetado en Arch Linux (AUR)
+
+Se incluye la receta `PKGBUILD` para compilar e instalar como paquete nativo del gestor `pacman`:
+
+```bash
+cd packaging/arch
+makepkg -si
 ```
 
 ---

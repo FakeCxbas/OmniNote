@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=OmniNote
+GenericName=STEM & Math Note-Taking
+Comment=Cuaderno digital vectorial de alto rendimiento para apuntes de ingeniería, ciencias y matemáticas
+Exec=omninote %F
+Icon=org.omninote.OmniNote
+Terminal=false
+Categories=Education;Science;Math;Graphics;Office;
+Keywords=notes;stem;math;latex;tablet;wacom;canvas;engineering;physics;apuntes;
+StartupNotify=true
+StartupWMClass=org.omninote.OmniNote
+MimeType=application/x-omninote;application/pdf;
