@@ -1301,8 +1301,7 @@ void MainWindow::syncToLocalCloudFolder(bool notifyUser) {
                     "Carpeta:\n%1\n\n"
                     "Archivos generados:\n"
                     "• omninote_stem.omninote (Base de datos SQLite completa)\n"
-                    "• Páginas individuales en PDFs/[Cuaderno]/\n"
-                    "• OmniNote_Apuntes.pdf (PDF vectorial en 300 DPI)\n"
+                    "• Hojas individuales numeradas en [Cuaderno]/\n"
                     "• Copia histórica en historial_backups/").arg(syncFolder));
     }
 }
@@ -1365,8 +1364,6 @@ std::unique_ptr<VectorCanvasScene> MainWindow::createSceneForPage(const PageReco
 QVector<GoogleDriveSyncService::SyncFileEntry> MainWindow::prepareNotebookExportFiles(const QString &targetDir) {
     QVector<GoogleDriveSyncService::SyncFileEntry> filesToSync;
 
-    QDir().mkpath(targetDir + "/PDFs");
-
     auto sanitizeName = [](const QString &name) -> QString {
         QString clean = name;
         clean.replace('/', '_').replace('\\', '_').replace(':', '_')
@@ -1387,7 +1384,7 @@ QVector<GoogleDriveSyncService::SyncFileEntry> MainWindow::prepareNotebookExport
             if (pages.isEmpty()) continue;
 
             QString cleanTitle = sanitizeName(nb.title);
-            QString subfolder = "PDFs/" + cleanTitle;
+            QString subfolder = cleanTitle;
             QString nbDir = targetDir + "/" + subfolder;
             QDir().mkpath(nbDir);
 
@@ -1396,7 +1393,7 @@ QVector<GoogleDriveSyncService::SyncFileEntry> MainWindow::prepareNotebookExport
 
             for (const auto &p : pages) {
                 auto scene = createSceneForPage(p);
-                QString pageFileName = QString("Página %1.pdf").arg(p.pageNumber);
+                QString pageFileName = QString("Hoja %1.pdf").arg(p.pageNumber);
                 QString pageLocalPath = nbDir + "/" + pageFileName;
 
                 PdfManager::exportNotebookToPdf(pageLocalPath, {scene.get()}, 300);
@@ -1412,7 +1409,7 @@ QVector<GoogleDriveSyncService::SyncFileEntry> MainWindow::prepareNotebookExport
                 scenes.push_back(std::move(scene));
             }
 
-            // Export complete merged notebook PDF for this notebook
+            // Export complete merged notebook PDF inside this notebook's folder
             QString fullFileName = QString("%1 - Completo.pdf").arg(cleanTitle);
             QString fullLocalPath = nbDir + "/" + fullFileName;
             PdfManager::exportNotebookToPdf(fullLocalPath, rawScenes, 300);
@@ -1423,39 +1420,22 @@ QVector<GoogleDriveSyncService::SyncFileEntry> MainWindow::prepareNotebookExport
             fullEntry.subfolderPath = subfolder;
             fullEntry.mimeType = "application/pdf";
             filesToSync.append(fullEntry);
-
-            // Also keep OmniNote_Apuntes.pdf updated in the root PDFs folder
-            if (nb.id == m_currentNotebookId || filesToSync.size() <= pages.size() + 2) {
-                QString mainPdfPath = targetDir + "/PDFs/OmniNote_Apuntes.pdf";
-                PdfManager::exportNotebookToPdf(mainPdfPath, rawScenes, 300);
-
-                GoogleDriveSyncService::SyncFileEntry mainEntry;
-                mainEntry.localFilePath = mainPdfPath;
-                mainEntry.remoteFileName = "OmniNote_Apuntes.pdf";
-                mainEntry.subfolderPath = "PDFs";
-                mainEntry.mimeType = "application/pdf";
-                filesToSync.append(mainEntry);
-            }
         }
     }
 
     // Fallback: If no notebooks exist in DB but current canvas has items
     if (filesToSync.isEmpty() && m_currentScene) {
-        QString subfolder = "PDFs/Apuntes";
+        QString subfolder = "Apuntes";
         QString nbDir = targetDir + "/" + subfolder;
         QDir().mkpath(nbDir);
 
-        QString pagePath = nbDir + "/Página 1.pdf";
+        QString pagePath = nbDir + "/Hoja 1.pdf";
         PdfManager::exportNotebookToPdf(pagePath, {m_currentScene}, 300);
-        filesToSync.append({pagePath, "Página 1.pdf", subfolder, "application/pdf"});
+        filesToSync.append({pagePath, "Hoja 1.pdf", subfolder, "application/pdf"});
 
         QString fullPath = nbDir + "/Apuntes - Completo.pdf";
         PdfManager::exportNotebookToPdf(fullPath, {m_currentScene}, 300);
         filesToSync.append({fullPath, "Apuntes - Completo.pdf", subfolder, "application/pdf"});
-
-        QString mainPdfPath = targetDir + "/PDFs/OmniNote_Apuntes.pdf";
-        PdfManager::exportNotebookToPdf(mainPdfPath, {m_currentScene}, 300);
-        filesToSync.append({mainPdfPath, "OmniNote_Apuntes.pdf", "PDFs", "application/pdf"});
     }
 
     return filesToSync;
@@ -2103,7 +2083,7 @@ void MainWindow::showCloudSyncDialog() {
 
             accountInfoLabel->setText(
                 "Inicia sesión con tu cuenta de Google. OmniNote creará una carpeta 'OmniNote STEM' "
-                "en tu Google Drive para respaldar tus apuntes SQLite y exportar tus PDFs automáticamente."
+                "en tu Google Drive donde organizará tus cuadernos por nombre y tus hojas en PDF numeradas."
             );
 
             connectBtn->setVisible(true);
@@ -2198,7 +2178,7 @@ void MainWindow::showCloudSyncDialog() {
 
         auto filesToSync = prepareNotebookExportFiles(tempExportDir);
 
-        statusLabel->setText(QString("Subiendo base de datos y %1 páginas a Google Drive...").arg(filesToSync.size()));
+        statusLabel->setText(QString("Sincronizando %1 archivos de cuadernos con Google Drive...").arg(filesToSync.size()));
 
         m_driveSyncService->syncNotebookPages(dbPath, filesToSync, [=](bool success, const QString &msg) {
             syncNowBtn->setEnabled(true);

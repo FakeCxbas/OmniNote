@@ -51,6 +51,7 @@ public:
     void findOrCreateFolder(const QString &folderName, const QString &parentId, std::function<void(bool success, const QString &folderId, const QString &error)> callback);
     void resolveFolderPath(const QString &folderPath, const QString &parentRootId, std::function<void(bool success, const QString &targetFolderId, const QString &error)> callback);
     void uploadFile(const QString &localFilePath, const QString &remoteFileName, const QString &mimeType, const QString &parentFolderId, std::function<void(bool success, const QString &fileId, const QString &error)> callback);
+    void cleanLegacyRootItems(std::function<void(bool success, const QString &message)> callback);
     void syncDatabase(const QString &dbFilePath, std::function<void(bool success, const QString &message)> callback);
     void syncPdf(const QString &pdfFilePath, const QString &remotePdfName, std::function<void(bool success, const QString &message)> callback);
     void syncAll(const QString &dbFilePath, const QString &pdfFilePath, const QString &pdfName, std::function<void(bool success, const QString &summary)> callback);
