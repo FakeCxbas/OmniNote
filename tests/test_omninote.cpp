@@ -221,6 +221,10 @@ void testSqliteStorage() {
     assert(remainingPages[0].id == pageId && remainingPages[0].pageNumber == 1);
     assert(remainingPages[1].id == page3Id && remainingPages[1].pageNumber == 2);
 
+    assert(storage.getNotebookTitle(nbId) == "Cálculo Multivariable");
+    assert(storage.getPageNumber(pageId) == 1);
+    assert(storage.getPageNumber(page3Id) == 2);
+
     QVector<StrokeRecord> verifyP2Strokes;
     QVector<StemBlockRecord> verifyP2Blocks;
     storage.loadPageData(page2Id, verifyP2Strokes, verifyP2Blocks);
@@ -880,7 +884,16 @@ void testGoogleDriveSyncService() {
     assert(pageEntries[6].remoteFileName == "Página 7.pdf");
     assert(pageEntries[0].subfolderPath == "PDFs/Apuntes");
 
-    std::cout << "  ✓ OAuth PKCE configuration, JSON import & page-by-page sync store passed!" << std::endl;
+    // Test syncSingleFile offline validation
+    bool syncCallbackInvoked = false;
+    service.syncSingleFile(pageEntries[0], [&](bool ok, const QString &err) {
+        syncCallbackInvoked = true;
+        assert(!ok);
+        assert(err.contains("No conectado"));
+    });
+    assert(syncCallbackInvoked);
+
+    std::cout << "  ✓ OAuth PKCE configuration, JSON import, single-page sync & store passed!" << std::endl;
 }
 
 void testTextBlockSelectionAndLasso() {

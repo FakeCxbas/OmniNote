@@ -56,6 +56,7 @@ public:
     void syncPdf(const QString &pdfFilePath, const QString &remotePdfName, std::function<void(bool success, const QString &message)> callback);
     void syncAll(const QString &dbFilePath, const QString &pdfFilePath, const QString &pdfName, std::function<void(bool success, const QString &summary)> callback);
     void syncNotebookPages(const QString &dbFilePath, const QVector<SyncFileEntry> &filesToSync, std::function<void(bool success, const QString &summary)> callback);
+    void syncSingleFile(const SyncFileEntry &fileEntry, std::function<void(bool success, const QString &error)> callback);
 
 signals:
     void authorizationUrlReady(const QString &url);
@@ -92,6 +93,7 @@ private:
 
     QString m_rootFolderId;
     QMap<QString, QString> m_folderCache;
+    QMap<QString, QString> m_fileIdCache;
     bool m_isAuthorizing{false};
 };
 

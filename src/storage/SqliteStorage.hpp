@@ -79,6 +79,7 @@ public:
     QVector<NotebookRecord> getNotebooks(qint64 subjectId);
     qint64 addNotebook(qint64 subjectId, const QString &title);
     bool deleteNotebook(qint64 notebookId);
+    QString getNotebookTitle(qint64 notebookId);
 
     // Pages
     QVector<PageRecord> getPages(qint64 notebookId);
@@ -86,6 +87,7 @@ public:
                    int bgType = 0, int pdfPage = -1, const QString &pdfPath = "");
     bool updatePageBackground(qint64 pageId, int bgType);
     bool deletePage(qint64 pageId);
+    int getPageNumber(qint64 pageId);
 
     // Page Content (Strokes and STEM blocks)
     bool savePageData(qint64 pageId, const QVector<StrokeRecord> &strokes, const QVector<StemBlockRecord> &blocks);
