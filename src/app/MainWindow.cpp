@@ -1734,22 +1734,25 @@ void MainWindow::updatePointerTipDisplay(bool isEraser) {
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     // 1. Tablet Pad Events (e.g. Wacom CTH-480 ExpressKeys)
+    // IMPORTANT: Never treat tablet pen/stylus as an ExpressKey pad!
     if (event->type() == QEvent::TabletPress) {
         auto *te = static_cast<QTabletEvent *>(event);
         const auto *dev = te->pointingDevice();
-        if (dev && (dev->type() == QInputDevice::DeviceType::TouchPad ||
-                    dev->type() == QInputDevice::DeviceType::Unknown ||
-                    dev->pointerType() == QPointingDevice::PointerType::Unknown ||
-                    dev->name().contains("Pad", Qt::CaseInsensitive))) {
-            if (te->buttons() & (Qt::LeftButton | Qt::BackButton)) {
+        bool isPen = (dev && (dev->pointerType() == QPointingDevice::PointerType::Pen ||
+                              dev->pointerType() == QPointingDevice::PointerType::Eraser ||
+                              dev->type() == QInputDevice::DeviceType::Stylus));
+        bool isPad = (dev && (dev->type() == QInputDevice::DeviceType::TouchPad ||
+                              dev->name().contains("Pad", Qt::CaseInsensitive)));
+        if (!isPen && isPad) {
+            if (te->buttons() & Qt::BackButton) {
                 if (m_currentScene) { m_currentScene->undoStack()->undo(); m_currentScene->update(); }
                 event->accept();
                 return true;
-            } else if (te->buttons() & (Qt::RightButton | Qt::ForwardButton)) {
+            } else if (te->buttons() & Qt::ForwardButton) {
                 if (m_currentScene) { m_currentScene->undoStack()->redo(); m_currentScene->update(); }
                 event->accept();
                 return true;
-            } else if (te->buttons() & (Qt::MiddleButton | Qt::ExtraButton1)) {
+            } else if (te->buttons() & Qt::ExtraButton1) {
                 if (m_penAction) { m_penAction->setChecked(true); onToolTriggered(m_penAction); }
                 event->accept();
                 return true;
@@ -1814,6 +1817,22 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event) {
+    QMainWindow::resizeEvent(event);
+    if (m_canvasView && m_canvasView->viewport()) {
+        m_canvasView->viewport()->update();
+    }
+}
+
+void MainWindow::changeEvent(QEvent *event) {
+    if (event->type() == QEvent::WindowStateChange || event->type() == QEvent::ActivationChange) {
+        if (m_canvasView && m_canvasView->viewport()) {
+            m_canvasView->viewport()->update();
+        }
+    }
+    QMainWindow::changeEvent(event);
 }
 
 void MainWindow::showCloudSyncDialog() {

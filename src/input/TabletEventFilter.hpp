@@ -88,6 +88,17 @@ protected:
             break;
         }
 
+        case QEvent::WindowDeactivate:
+        case QEvent::FocusOut:
+        case QEvent::Hide:
+        case QEvent::Leave: {
+            m_inProximity = false;
+            m_currentPressure = 0.0;
+            emit pressureChanged(0.0);
+            emit proximityChanged(false, m_isEraserTip);
+            break;
+        }
+
         default:
             break;
         }

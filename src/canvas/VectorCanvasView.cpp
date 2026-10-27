@@ -18,13 +18,9 @@ namespace OmniNote {
 
 VectorCanvasView::VectorCanvasView(VectorCanvasScene *scene, QWidget *parent)
     : QGraphicsView(scene, parent), m_canvasScene(scene) {
-    // 1. OpenGL Hardware Accelerated Viewport (Zero-latency tablet ink configuration)
-    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-    format.setSwapInterval(0);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    auto *glWidget = new QOpenGLWidget(this);
-    glWidget->setFormat(format);
-    setViewport(glWidget);
+    // 1. Double-buffered native viewport (Wayland resilient across resize and workspace switching)
+    viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
+    viewport()->setAttribute(Qt::WA_NoSystemBackground);
 
     // 2. High-Quality Vector Render Hints
     setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform | QPainter::TextAntialiasing);
@@ -654,10 +650,46 @@ void VectorCanvasView::scrollContentsBy(int dx, int dy) {
 
 void VectorCanvasView::resizeEvent(QResizeEvent *event) {
     QGraphicsView::resizeEvent(event);
+    m_isTabletStroke = false;
+    m_isPanning = false;
     updateSelectionActionBarPosition();
     if (m_latexOverlay && m_latexOverlay->isVisible()) {
         m_latexOverlay->setGeometry(viewport()->rect());
     }
+    viewport()->update();
+}
+
+void VectorCanvasView::changeEvent(QEvent *event) {
+    if (event->type() == QEvent::WindowStateChange || event->type() == QEvent::ActivationChange) {
+        m_isTabletStroke = false;
+        m_isPanning = false;
+        m_spacePressed = false;
+        m_interactingWithWidget = false;
+        m_stylusEraserActive = false;
+        m_stylusLassoActive = false;
+        if (m_canvasScene) {
+            m_canvasScene->handlePointerRelease(m_lastMousePos, 0.0, 0.0, 0.0, false);
+        }
+        updateToolCursor();
+        viewport()->update();
+    }
+    QGraphicsView::changeEvent(event);
+}
+
+void VectorCanvasView::focusOutEvent(QFocusEvent *event) {
+    m_isTabletStroke = false;
+    m_isPanning = false;
+    m_spacePressed = false;
+    m_interactingWithWidget = false;
+    QGraphicsView::focusOutEvent(event);
+}
+
+void VectorCanvasView::hideEvent(QHideEvent *event) {
+    m_isTabletStroke = false;
+    m_isPanning = false;
+    m_spacePressed = false;
+    m_interactingWithWidget = false;
+    QGraphicsView::hideEvent(event);
 }
 
 void VectorCanvasView::showLatexEditor(FormulaBlockItem *item) {

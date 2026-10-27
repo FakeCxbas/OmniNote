@@ -50,6 +50,9 @@ protected:
     void drawBackground(QPainter *painter, const QRectF &rect) override;
     void scrollContentsBy(int dx, int dy) override;
     void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 private:
     void applyZoom(qreal factor, const QPointF &centerPoint);
