@@ -158,4 +158,4 @@ OmniNote/
 
 ## Licencia
 
-Este proyecto se distribuye bajo los términos de la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más información.
+Este proyecto se distribuye bajo los términos de la Licencia MIT a nombre de **Sebastián Zambrano**. Eres libre de usar, modificar y distribuir este software siempre que se conserve el aviso de copyright original. Consulta el archivo [LICENSE](LICENSE) para más información.
