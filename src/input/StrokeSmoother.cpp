@@ -5,7 +5,7 @@
 namespace OmniNote {
 
 StrokeSmoother::StrokeSmoother()
-    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.68) {
+    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.78) {
 }
 
 void StrokeSmoother::reset() {
@@ -27,14 +27,12 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
     qreal dy = rawPoint.pos.y() - m_filteredPos.y();
     qreal dist = std::hypot(dx, dy);
 
-    // Adaptive alpha: strong smoothing on slow/subtle hand tremor, fast following on sweeping moves
-    // Enhanced responsiveness on small movements to preserve fine contours of exponents and small numbers
+    // Responsive adaptive alpha: preserves corners of math symbols without lag while removing sensor jitter
     qreal adaptiveAlpha = m_alpha;
-    if (dist < 4.0) {
-        adaptiveAlpha = qBound(0.65, m_alpha * (0.85 + 0.15 * (dist / 4.0)), 0.88);
-    } else if (dist > 15.0) {
-        // Fast cursive sweeps: zero-drag responsiveness
-        adaptiveAlpha = qMin(1.0, m_alpha + 0.20);
+    if (dist < 3.0) {
+        adaptiveAlpha = qBound(0.72, m_alpha * (0.90 + 0.10 * (dist / 3.0)), 0.90);
+    } else if (dist > 12.0) {
+        adaptiveAlpha = qMin(1.0, m_alpha + 0.18);
     }
 
     m_filteredPos.setX(m_filteredPos.x() + adaptiveAlpha * (rawPoint.pos.x() - m_filteredPos.x()));
@@ -44,20 +42,91 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
     return StrokePoint(m_filteredPos, m_filteredPressure, rawPoint.tiltX, rawPoint.tiltY, rawPoint.timestamp);
 }
 
+QVector<bool> StrokeSmoother::detectCorners(const QVector<StrokePoint> &pts, qreal targetSpan, qreal minTurnCos) {
+    const int n = pts.size();
+    QVector<bool> isCorner(n, false);
+    if (n < 3) {
+        if (n > 0) isCorner[0] = true;
+        if (n > 1) isCorner[n - 1] = true;
+        return isCorner;
+    }
+
+    isCorner.first() = true;
+    isCorner.last() = true;
+
+    QVector<qreal> dotProducts(n, 1.0);
+
+    for (int i = 1; i < n - 1; ++i) {
+        int idxA = i - 1;
+        qreal distA = 0.0;
+        while (idxA > 0) {
+            distA += std::hypot(pts[idxA].pos.x() - pts[idxA + 1].pos.x(),
+                                pts[idxA].pos.y() - pts[idxA + 1].pos.y());
+            if (distA >= targetSpan) break;
+            --idxA;
+        }
+
+        int idxB = i + 1;
+        qreal distB = 0.0;
+        while (idxB < n - 1) {
+            distB += std::hypot(pts[idxB].pos.x() - pts[idxB - 1].pos.x(),
+                                pts[idxB].pos.y() - pts[idxB - 1].pos.y());
+            if (distB >= targetSpan) break;
+            ++idxB;
+        }
+
+        QPointF v1 = pts[i].pos - pts[idxA].pos;
+        QPointF v2 = pts[idxB].pos - pts[i].pos;
+        qreal len1 = std::hypot(v1.x(), v1.y());
+        qreal len2 = std::hypot(v2.x(), v2.y());
+
+        if (len1 > 0.5 && len2 > 0.5) {
+            qreal dot = (v1.x() * v2.x() + v1.y() * v2.y()) / (len1 * len2);
+            dotProducts[i] = dot;
+        }
+    }
+
+    // Detect true vertices at curvature inflection points
+    for (int i = 1; i < n - 1; ++i) {
+        if (dotProducts[i] < minTurnCos) {
+            bool isLocalMin = true;
+            for (int k = qMax(0, i - 2); k <= qMin(n - 1, i + 2); ++k) {
+                if (dotProducts[k] < dotProducts[i] - 1e-4) {
+                    isLocalMin = false;
+                    break;
+                }
+            }
+            if (isLocalMin) {
+                isCorner[i] = true;
+            }
+        }
+    }
+
+    return isCorner;
+}
+
 QVector<StrokePoint> StrokeSmoother::stabilizePoints(const QVector<StrokePoint> &pts, int passes) {
     const int n = pts.size();
     if (n <= 3) {
         return pts;
     }
 
+    const QVector<bool> corners = detectCorners(pts);
+
     QVector<StrokePoint> cur = pts;
     for (int p = 0; p < passes; ++p) {
         QVector<StrokePoint> next = cur;
         for (int i = 1; i < n - 1; ++i) {
+            // Protect corners and their immediate adjacent points from spatial low-pass displacement
+            if (corners[i] || (i > 0 && corners[i - 1]) || (i < n - 1 && corners[i + 1])) {
+                next[i] = cur[i];
+                continue;
+            }
+
             if (i == 1 || i == n - 2) {
                 // 3-point Gaussian kernel for boundary transitions
-                next[i].pos = 0.25 * cur[i - 1].pos + 0.5 * cur[i].pos + 0.25 * cur[i + 1].pos;
-                next[i].pressure = 0.25 * cur[i - 1].pressure + 0.5 * cur[i].pressure + 0.25 * cur[i + 1].pressure;
+                next[i].pos = 0.20 * cur[i - 1].pos + 0.60 * cur[i].pos + 0.20 * cur[i + 1].pos;
+                next[i].pressure = 0.20 * cur[i - 1].pressure + 0.60 * cur[i].pressure + 0.20 * cur[i + 1].pressure;
             } else {
                 // 5-point binomial kernel [1, 4, 6, 4, 1] / 16 (ideal spatial low-pass filter)
                 next[i].pos = (1.0 * cur[i - 2].pos + 4.0 * cur[i - 1].pos + 6.0 * cur[i].pos + 4.0 * cur[i + 1].pos + 1.0 * cur[i + 2].pos) / 16.0;
@@ -75,8 +144,9 @@ QVector<StrokePoint> StrokeSmoother::interpolateCatmullRom(const QVector<StrokeP
         return pts;
     }
 
-    // Apply 5-point spatial stabilizer to suppress hand tremor while preserving true handwriting geometry
+    // Apply corner-preserving spatial stabilizer to suppress hand tremor while keeping mathematical vertices intact
     const QVector<StrokePoint> smoothPts = (n >= 4) ? stabilizePoints(pts, 1) : pts;
+    const QVector<bool> corners = detectCorners(smoothPts);
 
     QVector<StrokePoint> result;
     result.reserve((n - 1) * qMax(subdivisions, 6) + 1);
@@ -85,9 +155,10 @@ QVector<StrokePoint> StrokeSmoother::interpolateCatmullRom(const QVector<StrokeP
         const QPointF &p1 = smoothPts[i].pos;
         const QPointF &p2 = smoothPts[i + 1].pos;
 
-        // Ghost endpoint extrapolation along the natural segment tangent
-        const QPointF p0 = (i > 0) ? smoothPts[i - 1].pos : (p1 + (p1 - p2));
-        const QPointF p3 = (i + 2 < n) ? smoothPts[i + 2].pos : (p2 + (p2 - p1));
+        // If p1 is a sharp corner, the tangent leaving p1 must align with (p2 - p1) to avoid overshoot
+        const QPointF p0 = (i > 0 && !corners[i]) ? smoothPts[i - 1].pos : (p1 + (p1 - p2));
+        // If p2 is a sharp corner, the tangent arriving at p2 must align with (p2 - p1)
+        const QPointF p3 = (i + 2 < n && !corners[i + 1]) ? smoothPts[i + 2].pos : (p2 + (p2 - p1));
 
         auto getT = [](qreal t, const QPointF &a, const QPointF &b) {
             qreal d = std::hypot(b.x() - a.x(), b.y() - a.y());
@@ -100,8 +171,6 @@ QVector<StrokePoint> StrokeSmoother::interpolateCatmullRom(const QVector<StrokeP
         const qreal t3 = getT(t2, p2, p3);
 
         const qreal segLen = std::hypot(p2.x() - p1.x(), p2.y() - p1.y());
-        // Adaptive step calculation: ensure maximum distance between points is <= 2.0 pixels
-        // for buttery smooth antialiased curves without visible polygonal facets
         int steps = qMax(subdivisions, static_cast<int>(std::ceil(segLen / 2.0)));
         steps = qBound(subdivisions, steps, 28);
 
@@ -323,17 +392,17 @@ bool StrokeSmoother::trySnapToGeometricShape(const QVector<StrokePoint> &pts, QV
     const qreal diag = std::hypot(bbW, bbH);
     const qreal chordLength = std::hypot(pts.last().pos.x() - pts.first().pos.x(), pts.last().pos.y() - pts.first().pos.y());
 
-    // Small handwriting guard: never snap small strokes (exponents, subscripts, dots, tiny numbers)
-    if (diag < 40.0 || arcLength < 45.0) {
+    // Small handwriting guard: never snap small or normal-sized strokes (roots, 4, 7, fractions, exponents)
+    if (diag < 65.0 || arcLength < 75.0) {
         return false;
     }
 
     if (arcLength < 1.0) return false;
     const qreal straightness = chordLength / arcLength;
 
-    // 1. Straight Line Snapping (Underlines, division/fraction bars, axes)
-    // Needs sufficient length (>= 50px), high straightness (>= 0.94), and low max deviation
-    if (chordLength >= 50.0 && straightness >= 0.94) {
+    // 1. Straight Line Snapping (Underlines, long fraction/division bars, axes)
+    // Needs deliberate length (>= 80px), high straightness (>= 0.96), and low max deviation
+    if (chordLength >= 80.0 && straightness >= 0.96) {
         qreal maxDev = 0.0;
         const QPointF &pStart = pts.first().pos;
         const QPointF &pEnd = pts.last().pos;
@@ -342,7 +411,7 @@ bool StrokeSmoother::trySnapToGeometricShape(const QVector<StrokePoint> &pts, QV
             if (dev > maxDev) maxDev = dev;
         }
 
-        if (maxDev <= 12.0 && (maxDev / chordLength) <= 0.06) {
+        if (maxDev <= 8.0 && (maxDev / chordLength) <= 0.05) {
             int subs = qMax(4, qMin(32, static_cast<int>(chordLength / 10.0)));
             outSnapped.clear();
             outSnapped.reserve(subs + 1);
@@ -357,9 +426,9 @@ bool StrokeSmoother::trySnapToGeometricShape(const QVector<StrokePoint> &pts, QV
     }
 
     // 2. Circle / Ellipse Snapping
-    // Require substantial bounding size (>= 45px) so small handwritten symbols ('0', '8', 'o', '6') are never snapped
+    // Require substantial bounding size (>= 60px) and closed loop so digits ('0', '8', '6', 'o') are never snapped
     qreal endsGap = std::hypot(pts.last().pos.x() - pts.first().pos.x(), pts.last().pos.y() - pts.first().pos.y());
-    if (n >= 16 && bbW >= 45.0 && bbH >= 45.0 && endsGap <= 0.25 * diag) {
+    if (n >= 20 && bbW >= 60.0 && bbH >= 60.0 && endsGap <= 0.20 * diag) {
         qreal sumX = 0.0, sumY = 0.0;
         for (const auto &p : pts) {
             sumX += p.pos.x();
@@ -368,7 +437,7 @@ bool StrokeSmoother::trySnapToGeometricShape(const QVector<StrokePoint> &pts, QV
         QPointF center(sumX / n, sumY / n);
         qreal a = bbW * 0.5;
         qreal b = bbH * 0.5;
-        if (a > 10.0 && b > 10.0) {
+        if (a > 15.0 && b > 15.0) {
             qreal totalErr = 0.0;
             for (const auto &p : pts) {
                 qreal nx = (p.pos.x() - center.x()) / a;
@@ -376,7 +445,7 @@ bool StrokeSmoother::trySnapToGeometricShape(const QVector<StrokePoint> &pts, QV
                 totalErr += std::abs(std::hypot(nx, ny) - 1.0);
             }
             qreal avgErr = totalErr / n;
-            if (avgErr <= 0.15) {
+            if (avgErr <= 0.12) {
                 int steps = 48;
                 outSnapped.clear();
                 outSnapped.reserve(steps + 1);
@@ -418,22 +487,20 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
     const qreal diag = std::hypot(bbW, bbH);
 
     // Step 1: Geometric shape snapping (Canva QuickShape) - only for large intentional shapes
-    if (detectShapes && diag >= 40.0 && arcLength >= 45.0) {
+    // Guard against snapping numbers and roots: diag >= 65px and arcLength >= 75px
+    if (detectShapes && diag >= 65.0 && arcLength >= 75.0) {
         QVector<StrokePoint> snapped;
         if (trySnapToGeometricShape(pts, snapped)) {
             return snapped;
         }
     }
 
-    // Step 2: Scale-adaptive RDP simplification
-    // For small strokes (exponents x^2, x^3, subscripts, dots), use micro-epsilon (0.15px - 0.32px)
-    // so tight curves and loops are never flattened or lost.
-    // For normal strokes, use 0.55px (toned down from 1.1px) to preserve natural handwriting.
-    qreal epsilon = 0.55;
+    // Step 2: Scale-adaptive RDP simplification (tuned down to preserve fine contours of digits and math)
+    qreal epsilon = 0.35;
     if (diag < 25.0 || arcLength < 35.0) {
-        epsilon = qBound(0.15, diag * 0.015, 0.32);
+        epsilon = qBound(0.12, diag * 0.010, 0.25);
     } else if (diag < 60.0) {
-        epsilon = qBound(0.32, diag * 0.012, 0.55);
+        epsilon = qBound(0.25, diag * 0.008, 0.35);
     }
 
     QVector<StrokePoint> simplified = simplifyRDP(pts, epsilon);
@@ -443,35 +510,18 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
 
     const int m = simplified.size();
 
-    // Step 3: Salient Corner Detection (preserve sharp corners like in 'x', 'z', '7', square roots)
-    QVector<bool> isCorner(m, false);
-    isCorner.first() = true;
-    isCorner.last() = true;
-
-    for (int i = 1; i < m - 1; ++i) {
-        QPointF v1 = simplified[i].pos - simplified[i - 1].pos;
-        QPointF v2 = simplified[i + 1].pos - simplified[i].pos;
-        qreal len1 = std::hypot(v1.x(), v1.y());
-        qreal len2 = std::hypot(v2.x(), v2.y());
-        if (len1 > 1e-4 && len2 > 1e-4) {
-            qreal dot = (v1.x() * v2.x() + v1.y() * v2.y()) / (len1 * len2);
-            // Angle turn > ~55 degrees -> intentional sharp vertex
-            if (dot < 0.58) {
-                isCorner[i] = true;
-            }
-        }
-    }
+    // Step 3: Salient Corner Detection (preserve sharp corners like in '4', '7', 'z', and square roots)
+    QVector<bool> isCorner = detectCorners(simplified);
 
     // Step 4: Corner-preserving gentle binomial filter
-    // For small strokes, do only 1 very gentle pass (weights: 0.12, 0.76, 0.12) to avoid shrinkage
-    // For normal strokes, do 1 balanced pass (weights: 0.20, 0.60, 0.20)
-    qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.12 : 0.20;
-    qreal centerWeight = 1.0 - 2.0 * sideWeight;
+    // Uses gentle weights (0.12, 0.76, 0.12) to remove micro hand tremor without altering the user's handwriting
+    const qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.08 : 0.12;
+    const qreal centerWeight = 1.0 - 2.0 * sideWeight;
 
     QVector<StrokePoint> cur = simplified;
     QVector<StrokePoint> next = cur;
     for (int i = 1; i < m - 1; ++i) {
-        if (isCorner[i]) {
+        if (isCorner[i] || (i > 0 && isCorner[i - 1]) || (i < m - 1 && isCorner[i + 1])) {
             next[i] = cur[i];
         } else {
             next[i].pos = sideWeight * cur[i - 1].pos + centerWeight * cur[i].pos + sideWeight * cur[i + 1].pos;

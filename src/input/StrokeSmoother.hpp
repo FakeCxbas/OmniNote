@@ -42,9 +42,12 @@ public:
     // Spatial low-pass stabilizer for hand tremor suppression
     static QVector<StrokePoint> stabilizePoints(const QVector<StrokePoint> &points, int passes = 1);
 
+    // Salient corner detection (preserves sharp math vertices like in '4', '7', 'Z', and square roots)
+    static QVector<bool> detectCorners(const QVector<StrokePoint> &points, qreal targetSpan = 7.0, qreal minTurnCos = 0.74);
+
     // Stroke Beautification & Tremor Elimination (Canva-style Auto-Improvement)
     static QVector<StrokePoint> beautifyStroke(const QVector<StrokePoint> &points, bool detectShapes = true);
-    static QVector<StrokePoint> simplifyRDP(const QVector<StrokePoint> &points, qreal epsilon = 1.1);
+    static QVector<StrokePoint> simplifyRDP(const QVector<StrokePoint> &points, qreal epsilon = 0.35);
     static bool trySnapToGeometricShape(const QVector<StrokePoint> &points, QVector<StrokePoint> &outSnapped);
 
     // Configuration for filter
@@ -55,7 +58,7 @@ private:
     bool m_hasPrevious{false};
     QPointF m_filteredPos;
     qreal m_filteredPressure{0.5};
-    qreal m_alpha{0.68}; // Filter responsiveness weight
+    qreal m_alpha{0.78}; // Responsive filter weight (lowered assistance lag)
 };
 
 } // namespace OmniNote
