@@ -873,6 +873,24 @@ void MainWindow::loadInitialData() {
     QDir().mkpath(appData);
     QString dbPath = appData + "/omninote_stem.omninote";
 
+    // Transparent migration from legacy paths (e.g. when app name was "OmniNote STEM Engine")
+    QString genericData = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    QStringList legacyCandidates = {
+        genericData + "/OmniNote/OmniNote STEM Engine/omninote_stem.omninote",
+        genericData + "/OmniNote/omninote_stem.omninote",
+        genericData + "/OmniNote/omninote_stem.omninote.SAFETY_COPY"
+    };
+
+    if (!QFile::exists(dbPath) || QFileInfo(dbPath).size() <= 32768) {
+        for (const QString &cand : legacyCandidates) {
+            if (QFile::exists(cand) && QFileInfo(cand).size() > QFileInfo(dbPath).size()) {
+                QFile::remove(dbPath);
+                QFile::copy(cand, dbPath);
+                break;
+            }
+        }
+    }
+
     if (!m_storage.open(dbPath)) {
         return;
     }

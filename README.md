@@ -84,6 +84,15 @@ OmniNote STEM Engine es un entorno de notas técnicas y cálculo vectorial de al
 | `Ctrl + Rueda` | Zoom centrado en el cursor |
 | `Botón central / derecho + arrastrar` | Desplazamiento por el lienzo (Panning) |
 
+### Botones Físicos de Tableta (Wacom ExpressKeys)
+
+| Botón Físico (CTH-480) | Acción en OmniNote | Mapeo / Atajo |
+| :--- | :--- | :--- |
+| **Superior Izquierda (B0)** | Deshacer | `Ctrl + Z` |
+| **Inferior Izquierda (B1)** | Rehacer | `Ctrl + Y` |
+| **Superior Derecha (B2)** | Seleccionar Lápiz | `P` |
+| **Inferior Derecha (B3)** | Seleccionar Borrador | `E` |
+
 ---
 
 ## Requisitos y Compilación
@@ -159,22 +168,32 @@ makepkg -si
 ```text
 OmniNote/
 ├── assets/
-│   └── icons/
-│       └── phosphor_duotone/   # Iconos vectoriales oficiales Phosphor Duotone
+│   ├── icons/
+│   │   ├── org.omninote.OmniNote.svg  # Icono oficial de la aplicación
+│   │   ├── hicolor/                   # Iconos multirresolución (16x16 a 512x512)
+│   │   └── phosphor_duotone/          # Iconos vectoriales de herramientas
+│   └── org.omninote.OmniNote.desktop  # Entrada de escritorio XDG
+├── packaging/
+│   └── arch/
+│       └── PKGBUILD                   # Receta de empaquetado para Arch Linux / AUR
+├── scripts/
+│   ├── install.sh                     # Instalador en el espacio de usuario (~/.local)
+│   ├── uninstall.sh                   # Desinstalador limpio
+│   └── setup_wacom_cth480.sh          # Configuración de ExpressKeys para OpenTabletDriver
 ├── src/
-│   ├── main.cpp                # Punto de entrada
-│   ├── app/                    # Ventana principal, temas y gestión de iconos
-│   ├── input/                  # Manejo de eventos de tableta y suavizado Catmull-Rom
-│   ├── canvas/                 # Viewport OpenGL, trazos, lazo y regla virtual
-│   ├── stem/                   # Bloques de código, parser matemático, gráficas y LaTeX
-│   ├── pdf/                    # Importación y exportación vectorial (Poppler y QPdfWriter)
-│   ├── storage/                # Base de datos SQLite3
-│   └── sync/                   # Sincronización con Google Drive
+│   ├── main.cpp                       # Punto de entrada y configuración Wayland
+│   ├── app/                           # Ventana principal, temas y gestión de iconos
+│   ├── input/                         # Eventos de tableta, Wacom y suavizado Catmull-Rom
+│   ├── canvas/                        # Viewport OpenGL, trazos, lazo y regla virtual
+│   ├── stem/                          # Bloques de código, parser matemático, gráficas y LaTeX
+│   ├── pdf/                           # Importación y exportación vectorial (Poppler y QPdfWriter)
+│   ├── storage/                       # Base de datos SQLite3
+│   └── sync/                          # Sincronización con Google Drive
 ├── tests/
-│   └── test_omninote.cpp       # Suite de pruebas unitarias
-├── CMakeLists.txt              # Configuración de compilación CMake
-├── LICENSE                     # Licencia MIT
-└── README.md                   # Documentación técnica
+│   └── test_omninote.cpp              # Suite de pruebas unitarias (18 subsistemas)
+├── CMakeLists.txt                     # Configuración de compilación e instalación CMake
+├── LICENSE                            # Licencia MIT
+└── README.md                          # Documentación técnica
 ```
 
 ---
