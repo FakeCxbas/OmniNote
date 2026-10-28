@@ -5,7 +5,7 @@
 namespace OmniNote {
 
 StrokeSmoother::StrokeSmoother()
-    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.72) {
+    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.69) {
 }
 
 void StrokeSmoother::reset() {
@@ -27,10 +27,10 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
     qreal dy = rawPoint.pos.y() - m_filteredPos.y();
     qreal dist = std::hypot(dx, dy);
 
-    // Balanced adaptive alpha: eliminates handwriting tremor while preserving corner agility
+    // Enhanced adaptive alpha: eliminates handwriting tremor while preserving corner agility
     qreal adaptiveAlpha = m_alpha;
     if (dist < 3.0) {
-        adaptiveAlpha = qBound(0.65, m_alpha * (0.88 + 0.12 * (dist / 3.0)), 0.82);
+        adaptiveAlpha = qBound(0.60, m_alpha * (0.85 + 0.15 * (dist / 3.0)), 0.78);
     } else if (dist > 12.0) {
         adaptiveAlpha = qMin(1.0, m_alpha + 0.16);
     }
@@ -495,12 +495,12 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
         }
     }
 
-    // Step 2: Scale-adaptive RDP simplification (balanced middle ground between tremor removal and character preservation)
-    qreal epsilon = 0.45;
+    // Step 2: Scale-adaptive RDP simplification (enhanced assistance for clean contours)
+    qreal epsilon = 0.50;
     if (diag < 25.0 || arcLength < 35.0) {
-        epsilon = qBound(0.14, diag * 0.012, 0.28);
+        epsilon = qBound(0.15, diag * 0.014, 0.30);
     } else if (diag < 60.0) {
-        epsilon = qBound(0.28, diag * 0.010, 0.45);
+        epsilon = qBound(0.30, diag * 0.011, 0.50);
     }
 
     QVector<StrokePoint> simplified = simplifyRDP(pts, epsilon);
@@ -513,8 +513,8 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
     // Step 3: Salient Corner Detection (preserve sharp corners like in '4', '7', 'z', and square roots)
     QVector<bool> isCorner = detectCorners(simplified);
 
-    // Step 4: Corner-preserving gentle binomial filter (balanced middle ground weights 0.10 / 0.16)
-    const qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.10 : 0.16;
+    // Step 4: Corner-preserving gentle binomial filter (enhanced weights 0.12 / 0.18)
+    const qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.12 : 0.18;
     const qreal centerWeight = 1.0 - 2.0 * sideWeight;
 
     QVector<StrokePoint> cur = simplified;
