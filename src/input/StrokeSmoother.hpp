@@ -47,7 +47,7 @@ public:
 
     // Stroke Beautification & Tremor Elimination (Canva-style Auto-Improvement)
     static QVector<StrokePoint> beautifyStroke(const QVector<StrokePoint> &points, bool detectShapes = true);
-    static QVector<StrokePoint> simplifyRDP(const QVector<StrokePoint> &points, qreal epsilon = 0.45);
+    static QVector<StrokePoint> simplifyRDP(const QVector<StrokePoint> &points, qreal epsilon = 0.50);
     static bool trySnapToGeometricShape(const QVector<StrokePoint> &points, QVector<StrokePoint> &outSnapped);
 
     // Configuration for filter
@@ -58,7 +58,7 @@ private:
     bool m_hasPrevious{false};
     QPointF m_filteredPos;
     qreal m_filteredPressure{0.5};
-    qreal m_alpha{0.72}; // Balanced filter weight (smooth handwriting without lag or corner distortion)
+    qreal m_alpha{0.69}; // Enhanced assistance filter weight for stable handwriting
 };
 
 } // namespace OmniNote
