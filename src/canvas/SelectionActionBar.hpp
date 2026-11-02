@@ -13,16 +13,21 @@ public:
     explicit SelectionActionBar(QWidget *parent = nullptr);
 
     void setCurrentColor(const QColor &color);
+    void updateGroupState(bool canGroup, bool canUngroup);
 
 signals:
     void recolorRequested();
     void duplicateRequested();
+    void groupRequested();
+    void ungroupRequested();
     void deleteRequested();
     void clearRequested();
 
 private:
     QPushButton *m_colorBtn{nullptr};
     QPushButton *m_dupBtn{nullptr};
+    QPushButton *m_groupBtn{nullptr};
+    QPushButton *m_ungroupBtn{nullptr};
     QPushButton *m_delBtn{nullptr};
     QPushButton *m_closeBtn{nullptr};
     QColor m_color{QColor("#7aa2f7")};

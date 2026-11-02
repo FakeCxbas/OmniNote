@@ -248,4 +248,75 @@ private:
     bool m_ownsItems;
 };
 
+class GroupCommand : public QUndoCommand {
+public:
+    struct ItemPreviousGroup {
+        QGraphicsItem *item;
+        qint64 prevGroupId;
+    };
+
+    GroupCommand(QGraphicsScene *scene, const QVector<ItemPreviousGroup> &items, qint64 newGroupId, QUndoCommand *parent = nullptr)
+        : QUndoCommand("Agrupar Elementos", parent), m_scene(scene), m_items(items), m_newGroupId(newGroupId) {}
+
+    void undo() override {
+        for (const auto &entry : m_items) {
+            setItemGid(entry.item, entry.prevGroupId);
+        }
+    }
+
+    void redo() override {
+        for (const auto &entry : m_items) {
+            setItemGid(entry.item, m_newGroupId);
+        }
+    }
+
+private:
+    static void setItemGid(QGraphicsItem *item, qint64 gid) {
+        if (!item) return;
+        item->setData(StrokeItem::UserRoleGroupId, gid > 0 ? QVariant(gid) : QVariant());
+        if (item->type() == StrokeItem::Type) {
+            static_cast<StrokeItem *>(item)->setGroupId(gid);
+        }
+    }
+
+    QGraphicsScene *m_scene;
+    QVector<ItemPreviousGroup> m_items;
+    qint64 m_newGroupId;
+};
+
+class UngroupCommand : public QUndoCommand {
+public:
+    struct ItemPreviousGroup {
+        QGraphicsItem *item;
+        qint64 prevGroupId;
+    };
+
+    UngroupCommand(QGraphicsScene *scene, const QVector<ItemPreviousGroup> &items, QUndoCommand *parent = nullptr)
+        : QUndoCommand("Desagrupar Elementos", parent), m_scene(scene), m_items(items) {}
+
+    void undo() override {
+        for (const auto &entry : m_items) {
+            setItemGid(entry.item, entry.prevGroupId);
+        }
+    }
+
+    void redo() override {
+        for (const auto &entry : m_items) {
+            setItemGid(entry.item, 0);
+        }
+    }
+
+private:
+    static void setItemGid(QGraphicsItem *item, qint64 gid) {
+        if (!item) return;
+        item->setData(StrokeItem::UserRoleGroupId, gid > 0 ? QVariant(gid) : QVariant());
+        if (item->type() == StrokeItem::Type) {
+            static_cast<StrokeItem *>(item)->setGroupId(gid);
+        }
+    }
+
+    QGraphicsScene *m_scene;
+    QVector<ItemPreviousGroup> m_items;
+};
+
 } // namespace OmniNote

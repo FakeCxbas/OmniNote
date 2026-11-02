@@ -60,12 +60,21 @@ public:
     void handlePointerMove(const QPointF &scenePos, qreal pressure, qreal tx = 0.0, qreal ty = 0.0, bool isEraser = false);
     void handlePointerRelease(const QPointF &scenePos, qreal pressure, qreal tx = 0.0, qreal ty = 0.0, bool isEraser = false);
 
-    // Lasso operations
+    // Lasso and selection operations
     QRectF selectionBoundingRect() const;
     void deleteSelectedItems();
     void changeSelectedColor(const QColor &color);
     void duplicateSelectedItems();
     void scaleSelectedItems(qreal factor, const QPointF &pivot);
+
+    // Grouping operations
+    void groupSelectedItems();
+    void ungroupSelectedItems();
+    bool canGroupSelection() const;
+    bool canUngroupSelection() const;
+    static qint64 getItemGroupId(const QGraphicsItem *item);
+    static void setItemGroupId(QGraphicsItem *item, qint64 groupId);
+    void expandSelectionToGroups();
 
     // Serialization of page items
     QVector<StrokeItem *> allStrokes() const;

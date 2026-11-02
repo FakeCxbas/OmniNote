@@ -57,6 +57,18 @@ SelectionActionBar::SelectionActionBar(QWidget *parent) : QWidget(parent) {
     connect(m_dupBtn, &QPushButton::clicked, this, &SelectionActionBar::duplicateRequested);
     cLayout->addWidget(m_dupBtn);
 
+    m_groupBtn = new QPushButton("Agrupar", container);
+    m_groupBtn->setIcon(AppIcons::get(AppIcons::IconType::Group, QColor("#c0caf5"), 14));
+    m_groupBtn->setToolTip("Agrupar trazos o elementos seleccionados (Ctrl+G)");
+    connect(m_groupBtn, &QPushButton::clicked, this, &SelectionActionBar::groupRequested);
+    cLayout->addWidget(m_groupBtn);
+
+    m_ungroupBtn = new QPushButton("Desagrupar", container);
+    m_ungroupBtn->setIcon(AppIcons::get(AppIcons::IconType::Ungroup, QColor("#c0caf5"), 14));
+    m_ungroupBtn->setToolTip("Desagrupar trazos o elementos seleccionados (Ctrl+Shift+G)");
+    connect(m_ungroupBtn, &QPushButton::clicked, this, &SelectionActionBar::ungroupRequested);
+    cLayout->addWidget(m_ungroupBtn);
+
     m_delBtn = new QPushButton("Borrar", container);
     m_delBtn->setObjectName("DeleteBtn");
     m_delBtn->setIcon(AppIcons::get(AppIcons::IconType::Trash, QColor("#f7768e"), 14));
@@ -85,6 +97,12 @@ SelectionActionBar::SelectionActionBar(QWidget *parent) : QWidget(parent) {
 
 void SelectionActionBar::setCurrentColor(const QColor &color) {
     m_color = color;
+}
+
+void SelectionActionBar::updateGroupState(bool canGroup, bool canUngroup) {
+    if (m_groupBtn) m_groupBtn->setVisible(canGroup);
+    if (m_ungroupBtn) m_ungroupBtn->setVisible(canUngroup);
+    adjustSize();
 }
 
 } // namespace OmniNote

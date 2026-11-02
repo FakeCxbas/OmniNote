@@ -46,7 +46,9 @@ public:
         Edit,
         Copy,
         Cloud,
-        Help
+        Help,
+        Group,
+        Ungroup
     };
 
     static QIcon get(IconType type, const QColor &color = QColor("#c0caf5"), int size = 20);

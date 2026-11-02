@@ -123,6 +123,12 @@ QString AppIcons::getSvgXml(IconType type, const QString &colorHex) {
     case IconType::Help:
         pathData = R"(<path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.2"/><path d="M140,180a12,12,0,1,1-12-12A12,12,0,0,1,140,180ZM128,72c-22.06,0-40,16.15-40,36v4a8,8,0,0,0,16,0v-4c0-11,10.77-20,24-20s24,9,24,20-10.77,20-24,20a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-.72c18.24-3.35,32-17.9,32-35.28C168,88.15,150.06,72,128,72Zm104,56A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/>)";
         break;
+    case IconType::Group:
+        pathData = R"(<path d="M192,80V208a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8H184A8,8,0,0,1,192,80Z" opacity="0.2"/><path d="M184,64H64A16,16,0,0,0,48,80V208a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V80A16,16,0,0,0,184,64Zm0,144H64V80H184V208ZM208,32H88a8,8,0,0,0,0,16H208V168a8,8,0,0,0,16,0V48A16,16,0,0,0,208,32Z"/>)";
+        break;
+    case IconType::Ungroup:
+        pathData = R"(<path d="M104,40H48A8,8,0,0,0,40,48v56a8,8,0,0,0,8,8h56a8,8,0,0,0,8-8V48A8,8,0,0,0,104,40ZM208,144H152a8,8,0,0,0-8,8v56a8,8,0,0,0,8,8h56a8,8,0,0,0,8-8V152A8,8,0,0,0,208,144Zm-16,56H160V160h32ZM88,96H56V56H88Z" opacity="0.2"/><path d="M104,32H48A16,16,0,0,0,32,48v56a16,16,0,0,0,16,16h56a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM96,104H48V48H96Zm112,40H152a16,16,0,0,0-16,16v56a16,16,0,0,0,16,16h56a16,16,0,0,0,16-16V160A16,16,0,0,0,208,144Zm0,72H152V160h56Z"/>)";
+        break;
     }
 
     return QString(
@@ -169,6 +175,8 @@ QString AppIcons::getSolarSvgName(IconType type) {
     case IconType::Copy: return "copy.svg";
     case IconType::Cloud: return "cloud.svg";
     case IconType::Help: return "help.svg";
+    case IconType::Group: return "group.svg";
+    case IconType::Ungroup: return "ungroup.svg";
     }
     return QString();
 }

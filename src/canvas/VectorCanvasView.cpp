@@ -63,6 +63,14 @@ VectorCanvasView::VectorCanvasView(VectorCanvasScene *scene, QWidget *parent)
         if (m_canvasScene) m_canvasScene->duplicateSelectedItems();
         updateSelectionActionBarPosition();
     });
+    connect(m_selectionActionBar, &SelectionActionBar::groupRequested, this, [this]() {
+        if (m_canvasScene) m_canvasScene->groupSelectedItems();
+        updateSelectionActionBarPosition();
+    });
+    connect(m_selectionActionBar, &SelectionActionBar::ungroupRequested, this, [this]() {
+        if (m_canvasScene) m_canvasScene->ungroupSelectedItems();
+        updateSelectionActionBarPosition();
+    });
     connect(m_selectionActionBar, &SelectionActionBar::deleteRequested, this, [this]() {
         if (m_canvasScene) m_canvasScene->deleteSelectedItems();
         if (m_selectionActionBar) m_selectionActionBar->hide();
@@ -702,6 +710,8 @@ void VectorCanvasView::updateSelectionActionBarPosition() {
         if (m_selectionActionBar) m_selectionActionBar->hide();
         return;
     }
+
+    m_selectionActionBar->updateGroupState(m_canvasScene->canGroupSelection(), m_canvasScene->canUngroupSelection());
 
     QRectF sceneSel = m_canvasScene->selectionBoundingRect();
     if (sceneSel.isEmpty()) {
