@@ -475,6 +475,27 @@ void MainWindow::setupShortcuts() {
         if (m_currentScene) m_currentScene->duplicateSelectedItems();
     });
 
+    auto *groupShortcut = new QShortcut(QKeySequence("Ctrl+G"), this);
+    connect(groupShortcut, &QShortcut::activated, this, [this]() {
+        if (m_currentScene && !m_currentScene->focusItem()) {
+            m_currentScene->groupSelectedItems();
+        }
+    });
+
+    auto *ungroupShortcut = new QShortcut(QKeySequence("Ctrl+Shift+G"), this);
+    connect(ungroupShortcut, &QShortcut::activated, this, [this]() {
+        if (m_currentScene && !m_currentScene->focusItem()) {
+            m_currentScene->ungroupSelectedItems();
+        }
+    });
+
+    auto *ungroupAltShortcut = new QShortcut(QKeySequence("Ctrl+U"), this);
+    connect(ungroupAltShortcut, &QShortcut::activated, this, [this]() {
+        if (m_currentScene && !m_currentScene->focusItem()) {
+            m_currentScene->ungroupSelectedItems();
+        }
+    });
+
     auto *decWidthShortcut = new QShortcut(QKeySequence(Qt::Key_BracketLeft), this);
     connect(decWidthShortcut, &QShortcut::activated, this, [this]() {
         if (m_widthControl) m_widthControl->stepDown();

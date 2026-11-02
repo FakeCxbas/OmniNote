@@ -5,6 +5,8 @@
 #include <QtMath>
 #include <QGraphicsView>
 #include <QDateTime>
+#include <QSet>
+#include <QMap>
 
 namespace OmniNote {
 
@@ -367,6 +369,7 @@ void VectorCanvasScene::applyLassoSelection() {
                 }
                 if (curr && (curr->flags() & QGraphicsItem::ItemIsSelectable)) {
                     curr->setSelected(true);
+                    expandSelectionToGroups();
                     emit selectionStateChanged(true);
                     return;
                 }
@@ -394,6 +397,10 @@ void VectorCanvasScene::applyLassoSelection() {
                 anySelected = true;
             }
         }
+    }
+
+    if (anySelected) {
+        expandSelectionToGroups();
     }
 
     emit selectionStateChanged(anySelected);
@@ -474,6 +481,7 @@ void VectorCanvasScene::duplicateSelectedItems() {
 
     clearSelection();
     QList<QGraphicsItem *> newItems;
+    QList<QGraphicsItem *> origItems;
 
     for (auto *it : selected) {
         if (it->type() == StrokeItem::Type) {
@@ -487,6 +495,7 @@ void VectorCanvasScene::duplicateSelectedItems() {
             addItem(copy);
             copy->setSelected(true);
             newItems.append(copy);
+            origItems.append(orig);
         } else if (it->type() == TextBlockItem::Type) {
             auto *orig = static_cast<TextBlockItem *>(it);
             auto *copy = new TextBlockItem(orig->pos() + QPointF(25, 25));
@@ -494,6 +503,20 @@ void VectorCanvasScene::duplicateSelectedItems() {
             addItem(copy);
             copy->setSelected(true);
             newItems.append(copy);
+            origItems.append(orig);
+        }
+    }
+
+    // Preserve grouping on duplicated items with fresh group IDs
+    QMap<qint64, qint64> oldToNewGroups;
+    static qint64 s_dupGroupCounter = 1;
+    for (int i = 0; i < origItems.size() && i < newItems.size(); ++i) {
+        qint64 origGid = getItemGroupId(origItems[i]);
+        if (origGid > 0) {
+            if (!oldToNewGroups.contains(origGid)) {
+                oldToNewGroups[origGid] = QDateTime::currentMSecsSinceEpoch() * 1000 + (s_dupGroupCounter++ % 1000);
+            }
+            setItemGroupId(newItems[i], oldToNewGroups[origGid]);
         }
     }
 
@@ -512,6 +535,109 @@ void VectorCanvasScene::duplicateSelectedItems() {
         invalidate(sceneRect(), ForegroundLayer);
         update();
     }
+}
+
+qint64 VectorCanvasScene::getItemGroupId(const QGraphicsItem *item) {
+    if (!item) return 0;
+    if (item->type() == StrokeItem::Type) {
+        return static_cast<const StrokeItem *>(item)->groupId();
+    }
+    return item->data(StrokeItem::UserRoleGroupId).toLongLong();
+}
+
+void VectorCanvasScene::setItemGroupId(QGraphicsItem *item, qint64 groupId) {
+    if (!item) return;
+    item->setData(StrokeItem::UserRoleGroupId, groupId > 0 ? QVariant(groupId) : QVariant());
+    if (item->type() == StrokeItem::Type) {
+        static_cast<StrokeItem *>(item)->setGroupId(groupId);
+    }
+}
+
+void VectorCanvasScene::expandSelectionToGroups() {
+    QSet<qint64> groupIds;
+    for (auto *it : selectedItems()) {
+        qint64 gid = getItemGroupId(it);
+        if (gid > 0) {
+            groupIds.insert(gid);
+        }
+    }
+    if (groupIds.isEmpty()) return;
+
+    for (auto *it : items()) {
+        if (it->flags() & QGraphicsItem::ItemIsSelectable) {
+            qint64 gid = getItemGroupId(it);
+            if (gid > 0 && groupIds.contains(gid) && !it->isSelected()) {
+                it->setSelected(true);
+            }
+        }
+    }
+}
+
+bool VectorCanvasScene::canGroupSelection() const {
+    auto selected = selectedItems();
+    if (selected.size() < 2) return false;
+
+    qint64 firstGid = getItemGroupId(selected.first());
+    if (firstGid == 0) return true;
+
+    for (int i = 1; i < selected.size(); ++i) {
+        if (getItemGroupId(selected[i]) != firstGid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool VectorCanvasScene::canUngroupSelection() const {
+    for (auto *it : selectedItems()) {
+        if (getItemGroupId(it) > 0) return true;
+    }
+    return false;
+}
+
+void VectorCanvasScene::groupSelectedItems() {
+    auto selected = selectedItems();
+    if (selected.size() < 2) return;
+
+    if (!canGroupSelection()) return;
+
+    static qint64 s_nextGroupId = 1;
+    qint64 newGroupId = QDateTime::currentMSecsSinceEpoch() * 1000 + (s_nextGroupId++ % 1000);
+
+    QVector<GroupCommand::ItemPreviousGroup> prevGroups;
+    prevGroups.reserve(selected.size());
+
+    for (auto *it : selected) {
+        prevGroups.append({it, getItemGroupId(it)});
+        setItemGroupId(it, newGroupId);
+    }
+
+    m_undoStack.push(new GroupCommand(this, prevGroups, newGroupId));
+    emit selectionStateChanged(true);
+    emit contentModified();
+    invalidate(sceneRect(), ForegroundLayer);
+    update();
+}
+
+void VectorCanvasScene::ungroupSelectedItems() {
+    auto selected = selectedItems();
+    if (selected.isEmpty()) return;
+
+    QVector<UngroupCommand::ItemPreviousGroup> prevGroups;
+    for (auto *it : selected) {
+        qint64 gid = getItemGroupId(it);
+        if (gid > 0) {
+            prevGroups.append({it, gid});
+            setItemGroupId(it, 0);
+        }
+    }
+    if (prevGroups.isEmpty()) return;
+
+    m_undoStack.push(new UngroupCommand(this, prevGroups));
+    emit selectionStateChanged(true);
+    emit contentModified();
+    invalidate(sceneRect(), ForegroundLayer);
+    update();
 }
 
 void VectorCanvasScene::scaleSelectedItems(qreal factor, const QPointF &pivot) {

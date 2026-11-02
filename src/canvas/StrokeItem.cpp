@@ -337,19 +337,25 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
     }
 }
 
+void StrokeItem::setGroupId(qint64 id) {
+    m_groupId = id;
+    setData(UserRoleGroupId, id > 0 ? QVariant(id) : QVariant());
+}
+
 QByteArray StrokeItem::serialize() const {
     QByteArray uncompressed;
     QDataStream stream(&uncompressed, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_6_0);
 
     const quint32 magic = 0x4F4D4E49; // "OMNI"
-    const quint16 version = 1;
+    const quint16 version = 2;
 
     stream << magic << version;
     stream << static_cast<qint32>(m_toolType);
     stream << m_color.rgba();
     stream << m_baseWidth;
     stream << zValue();
+    stream << m_groupId;
 
     stream << static_cast<qint32>(m_points.size());
     for (const auto &pt : m_points) {
@@ -372,7 +378,7 @@ StrokeItem *StrokeItem::deserialize(const QByteArray &data) {
     quint16 version;
     stream >> magic >> version;
 
-    if (magic != 0x4F4D4E49 || version != 1) {
+    if (magic != 0x4F4D4E49 || (version != 1 && version != 2)) {
         return nullptr;
     }
 
@@ -380,12 +386,18 @@ StrokeItem *StrokeItem::deserialize(const QByteArray &data) {
     QRgb colorRgba;
     qreal baseWidth;
     qreal zVal;
+    qint64 groupId = 0;
     qint32 count;
 
-    stream >> rawToolType >> colorRgba >> baseWidth >> zVal >> count;
+    if (version == 1) {
+        stream >> rawToolType >> colorRgba >> baseWidth >> zVal >> count;
+    } else { // version 2
+        stream >> rawToolType >> colorRgba >> baseWidth >> zVal >> groupId >> count;
+    }
 
     auto *item = new StrokeItem(static_cast<ToolType>(rawToolType), QColor::fromRgba(colorRgba), baseWidth);
     item->setZValue(zVal);
+    item->setGroupId(groupId);
 
     QVector<StrokePoint> points;
     points.reserve(count);

@@ -59,7 +59,10 @@ public:
 
     const QPolygonF &ribbonPolygon() const { return m_ribbon; }
 
-    bool isHighlighter() const { return m_toolType == ToolType::Highlighter; }
+    static constexpr int UserRoleGroupId = Qt::UserRole + 100;
+
+    qint64 groupId() const { return m_groupId; }
+    void setGroupId(qint64 id);
 
     QByteArray serialize() const;
     static StrokeItem *deserialize(const QByteArray &data);
@@ -76,6 +79,7 @@ private:
     QPainterPath m_shapePath;
     QRectF m_boundingRect;
     bool m_autoImprove{true};
+    qint64 m_groupId{0};
 };
 
 } // namespace OmniNote

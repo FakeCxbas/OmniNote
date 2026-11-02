@@ -967,6 +967,131 @@ void testTextBlockSelectionAndLasso() {
     std::cout << "  ✓ Text selection flags, lasso tap select, recolor, duplicate & scale passed!" << std::endl;
 }
 
+void testCanvasSelectionAndGrouping() {
+    std::cout << "[TEST] 19. VectorCanvasScene Stroke & Element Selection, Grouping, Ungrouping & Persistence..." << std::endl;
+
+    VectorCanvasScene scene(1240, 1754);
+
+    // 1. Create two strokes representing letters
+    auto *strokeA = new StrokeItem(ToolType::Pen, QColor("#ffffff"), 2.5);
+    strokeA->setPoints({
+        StrokePoint(QPointF(100, 100), 0.5),
+        StrokePoint(QPointF(110, 120), 0.6),
+        StrokePoint(QPointF(120, 100), 0.5)
+    });
+    strokeA->finalizeStroke();
+    scene.addItem(strokeA);
+
+    auto *strokeB = new StrokeItem(ToolType::Pen, QColor("#ffffff"), 2.5);
+    strokeB->setPoints({
+        StrokePoint(QPointF(130, 100), 0.5),
+        StrokePoint(QPointF(140, 120), 0.6),
+        StrokePoint(QPointF(150, 100), 0.5)
+    });
+    strokeB->finalizeStroke();
+    scene.addItem(strokeB);
+
+    assert(strokeA->groupId() == 0);
+    assert(strokeB->groupId() == 0);
+    assert(!scene.canGroupSelection());
+    assert(!scene.canUngroupSelection());
+
+    // 2. Select both strokes and group them
+    strokeA->setSelected(true);
+    strokeB->setSelected(true);
+    assert(scene.canGroupSelection());
+    assert(!scene.canUngroupSelection());
+
+    scene.groupSelectedItems();
+
+    assert(strokeA->groupId() > 0);
+    assert(strokeB->groupId() > 0);
+    assert(strokeA->groupId() == strokeB->groupId());
+    assert(!scene.canGroupSelection()); // Already in the same group
+    assert(scene.canUngroupSelection());
+
+    // 3. Test group-aware selection (selecting one selects the whole group)
+    scene.clearSelection();
+    assert(scene.selectedItems().isEmpty());
+
+    // Click on strokeA in Lasso mode
+    scene.setCurrentTool(ToolType::Lasso);
+    scene.handlePointerPress(QPointF(110, 110), 0.5);
+    scene.handlePointerRelease(QPointF(110, 110), 0.5);
+
+    assert(strokeA->isSelected());
+    assert(strokeB->isSelected());
+    assert(scene.selectedItems().size() == 2);
+
+    // 4. Test moving the group
+    QPointF origA = strokeA->points().first().pos;
+    QPointF origB = strokeB->points().first().pos;
+
+    scene.handlePointerPress(QPointF(110, 110), 0.5); // Inside selection
+    scene.handlePointerMove(QPointF(130, 130), 0.5);
+    scene.handlePointerRelease(QPointF(130, 130), 0.5);
+
+    QPointF newA = strokeA->points().first().pos;
+    QPointF newB = strokeB->points().first().pos;
+    assert(std::abs((newA.x() - origA.x()) - 20.0) < 1.0);
+    assert(std::abs((newB.x() - origB.x()) - 20.0) < 1.0);
+
+    // 5. Test Undo and Redo of Move
+    scene.undoStack()->undo();
+    assert(std::abs(strokeA->points().first().pos.x() - origA.x()) < 1e-3);
+    assert(std::abs(strokeB->points().first().pos.x() - origB.x()) < 1e-3);
+
+    scene.undoStack()->redo();
+    assert(std::abs((strokeA->points().first().pos.x() - origA.x()) - 20.0) < 1.0);
+
+    // 6. Test Undo of Grouping
+    scene.undoStack()->undo(); // Undo Move
+    scene.undoStack()->undo(); // Undo Group
+    assert(strokeA->groupId() == 0);
+    assert(strokeB->groupId() == 0);
+
+    // Redo Grouping
+    scene.undoStack()->redo();
+    assert(strokeA->groupId() > 0);
+    assert(strokeA->groupId() == strokeB->groupId());
+
+    // 7. Test Ungrouping
+    scene.ungroupSelectedItems();
+    assert(strokeA->groupId() == 0);
+    assert(strokeB->groupId() == 0);
+    assert(!scene.canUngroupSelection());
+
+    // Undo Ungrouping restores the group
+    scene.undoStack()->undo();
+    assert(strokeA->groupId() > 0);
+    assert(strokeA->groupId() == strokeB->groupId());
+
+    // 8. Test Duplication with grouping preserved
+    int countBefore = scene.items().size();
+    scene.duplicateSelectedItems();
+    assert(scene.items().size() == countBefore + 2);
+    assert(scene.selectedItems().size() == 2);
+
+    auto *dupA = dynamic_cast<StrokeItem *>(scene.selectedItems()[0]);
+    auto *dupB = dynamic_cast<StrokeItem *>(scene.selectedItems()[1]);
+    assert(dupA != nullptr && dupB != nullptr);
+    assert(dupA->groupId() > 0);
+    assert(dupB->groupId() > 0);
+    assert(dupA->groupId() == dupB->groupId());
+    assert(dupA->groupId() != strokeA->groupId()); // Fresh independent group ID!
+
+    // 9. Test Stroke Serialization with groupId (Version 2)
+    QByteArray blob = strokeA->serialize();
+    assert(!blob.isEmpty());
+    StrokeItem *restored = StrokeItem::deserialize(blob);
+    assert(restored != nullptr);
+    assert(restored->groupId() == strokeA->groupId());
+    assert(restored->points().size() == strokeA->points().size());
+    delete restored;
+
+    std::cout << "  ✓ Element selection, group-aware lasso, moving, undo/redo, duplication & serialization passed!" << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     // Initialize QApplication with headless / offscreen support for scene/raster operations
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -994,6 +1119,7 @@ int main(int argc, char *argv[]) {
     testFormulaBlockItem();
     testGoogleDriveSyncService();
     testTextBlockSelectionAndLasso();
+    testCanvasSelectionAndGrouping();
 
     // Render visual inspection artifact of all toolbar icons
     {
@@ -1058,6 +1184,6 @@ int main(int argc, char *argv[]) {
         preview.save("/home/fakecxbas/.gemini/antigravity/brain/cd378ad1-72ef-4f57-ad6a-e9e23ecc1374/icons_preview.png");
     }
 
-    std::cout << "\n>>> ALL 18 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
+    std::cout << "\n>>> ALL 19 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
     return 0;
 }
