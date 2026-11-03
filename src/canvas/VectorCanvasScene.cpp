@@ -7,8 +7,14 @@
 #include <QDateTime>
 #include <QSet>
 #include <QMap>
+#include <QAtomicInteger>
 
 namespace OmniNote {
+
+static QAtomicInteger<qint64> s_globalGroupIdCounter(100);
+static inline qint64 generateUniqueGroupId() {
+    return QDateTime::currentMSecsSinceEpoch() * 10000 + (s_globalGroupIdCounter.fetchAndAddRelaxed(1) % 10000);
+}
 
 VectorCanvasScene::VectorCanvasScene(qreal width, qreal height, QObject *parent)
     : QGraphicsScene(parent),
@@ -290,7 +296,7 @@ void VectorCanvasScene::handlePointerRelease(const QPointF &scenePos, qreal pres
     if (m_isMovingSelection) {
         m_isMovingSelection = false;
         if (!m_moveTotalDelta.isNull()) {
-            m_undoStack.push(new MoveItemsCommand(selectedItems(), m_moveTotalDelta));
+            m_undoStack.push(new MoveItemsCommand(selectedItems(), m_moveTotalDelta, true));
             emit contentModified();
         }
         invalidate(sceneRect(), ForegroundLayer);
@@ -300,7 +306,7 @@ void VectorCanvasScene::handlePointerRelease(const QPointF &scenePos, qreal pres
     if (m_isScalingSelection) {
         m_isScalingSelection = false;
         if (std::abs(m_scaleTotalFactor - 1.0) > 0.01) {
-            m_undoStack.push(new ScaleStrokesCommand(selectedItems(), m_scaleTotalFactor, m_scalePivot));
+            m_undoStack.push(new ScaleStrokesCommand(selectedItems(), m_scaleTotalFactor, m_scalePivot, true));
             emit contentModified();
         }
         invalidate(sceneRect(), ForegroundLayer);
@@ -316,11 +322,11 @@ void VectorCanvasScene::handlePointerRelease(const QPointF &scenePos, qreal pres
     }
 
     if (m_isDrawing && m_activeStrokeItem) {
-        StrokePoint rawPt(clampedPos, pressure, tx, ty, QDateTime::currentMSecsSinceEpoch());
+        StrokePoint rawPt(effectivePos, pressure, tx, ty, QDateTime::currentMSecsSinceEpoch());
 
         if (m_activeStrokeItem->toolType() == ToolType::Pen || m_activeStrokeItem->toolType() == ToolType::Highlighter) {
             StrokePoint filtered = m_smoother.filterPoint(rawPt);
-            if (m_activePoints.isEmpty() || std::hypot(clampedPos.x() - m_activePoints.last().pos.x(), clampedPos.y() - m_activePoints.last().pos.y()) > 0.2) {
+            if (m_activePoints.isEmpty() || std::hypot(effectivePos.x() - m_activePoints.last().pos.x(), effectivePos.y() - m_activePoints.last().pos.y()) > 0.2) {
                 m_activePoints.append(filtered);
                 m_activeStrokeItem->addPointFast(filtered);
             }
@@ -361,7 +367,10 @@ void VectorCanvasScene::applyLassoSelection() {
     if (m_lassopoly.size() < 3) {
         if (!m_lassopoly.isEmpty()) {
             QPointF clickPos = m_lassopoly.first();
-            QList<QGraphicsItem *> clicked = items(clickPos);
+            // Search with a generous click tolerance radius (14px) so thin handwriting strokes are easily selected
+            QPainterPath clickArea;
+            clickArea.addEllipse(clickPos, 14.0, 14.0);
+            QList<QGraphicsItem *> clicked = items(clickArea);
             for (auto *it : clicked) {
                 QGraphicsItem *curr = it;
                 while (curr && !(curr->flags() & QGraphicsItem::ItemIsSelectable)) {
@@ -421,16 +430,19 @@ VectorCanvasScene::SelectionHandle VectorCanvasScene::hitTestSelectionHandle(con
     if (sel.isEmpty()) return SelectionHandle::None;
 
     QRectF box = sel.adjusted(-8, -8, 8, 8);
-    const qreal handleRadius = 12.0;
+    const qreal maxHandleRadius = 12.0;
+    const qreal handleRadius = qMin(maxHandleRadius, qMin(box.width(), box.height()) * 0.3);
 
     auto hit = [pos, handleRadius](const QPointF &corner) {
         return std::hypot(pos.x() - corner.x(), pos.y() - corner.y()) <= handleRadius;
     };
 
-    if (hit(box.topLeft())) return SelectionHandle::TopLeft;
-    if (hit(box.topRight())) return SelectionHandle::TopRight;
-    if (hit(box.bottomRight())) return SelectionHandle::BottomRight;
-    if (hit(box.bottomLeft())) return SelectionHandle::BottomLeft;
+    if (box.width() >= 24.0 && box.height() >= 24.0) {
+        if (hit(box.topLeft())) return SelectionHandle::TopLeft;
+        if (hit(box.topRight())) return SelectionHandle::TopRight;
+        if (hit(box.bottomRight())) return SelectionHandle::BottomRight;
+        if (hit(box.bottomLeft())) return SelectionHandle::BottomLeft;
+    }
 
     if (box.contains(pos)) return SelectionHandle::Inside;
 
@@ -509,12 +521,11 @@ void VectorCanvasScene::duplicateSelectedItems() {
 
     // Preserve grouping on duplicated items with fresh group IDs
     QMap<qint64, qint64> oldToNewGroups;
-    static qint64 s_dupGroupCounter = 1;
     for (int i = 0; i < origItems.size() && i < newItems.size(); ++i) {
         qint64 origGid = getItemGroupId(origItems[i]);
         if (origGid > 0) {
             if (!oldToNewGroups.contains(origGid)) {
-                oldToNewGroups[origGid] = QDateTime::currentMSecsSinceEpoch() * 1000 + (s_dupGroupCounter++ % 1000);
+                oldToNewGroups[origGid] = generateUniqueGroupId();
             }
             setItemGroupId(newItems[i], oldToNewGroups[origGid]);
         }
@@ -601,8 +612,7 @@ void VectorCanvasScene::groupSelectedItems() {
 
     if (!canGroupSelection()) return;
 
-    static qint64 s_nextGroupId = 1;
-    qint64 newGroupId = QDateTime::currentMSecsSinceEpoch() * 1000 + (s_nextGroupId++ % 1000);
+    qint64 newGroupId = generateUniqueGroupId();
 
     QVector<GroupCommand::ItemPreviousGroup> prevGroups;
     prevGroups.reserve(selected.size());
@@ -649,7 +659,7 @@ void VectorCanvasScene::scaleSelectedItems(qreal factor, const QPointF &pivot) {
             it->setPos(pivot + (it->pos() - pivot) * factor);
         }
     }
-    m_undoStack.push(new ScaleStrokesCommand(selectedItems(), factor, pivot));
+    m_undoStack.push(new ScaleStrokesCommand(selectedItems(), factor, pivot, true));
     emit contentModified();
     invalidate(sceneRect(), ForegroundLayer);
     update();

@@ -25,7 +25,7 @@ void VirtualRulerItem::setRulerLength(qreal len) {
 }
 
 void VirtualRulerItem::setRulerAngle(qreal degrees) {
-    m_angleDegrees = normalizeAngle(degrees);
+    m_angleDegrees = snapAngle(degrees);
     setRotation(m_angleDegrees);
     update();
     emit rulerMoved();

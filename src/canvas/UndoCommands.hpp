@@ -79,8 +79,8 @@ private:
 
 class MoveItemsCommand : public QUndoCommand {
 public:
-    MoveItemsCommand(const QList<QGraphicsItem*> &items, const QPointF &delta, QUndoCommand *parent = nullptr)
-        : QUndoCommand("Mover Elementos", parent), m_items(items), m_delta(delta) {}
+    MoveItemsCommand(const QList<QGraphicsItem*> &items, const QPointF &delta, bool alreadyMoved = true, QUndoCommand *parent = nullptr)
+        : QUndoCommand("Mover Elementos", parent), m_items(items), m_delta(delta), m_alreadyMoved(alreadyMoved) {}
 
     void undo() override {
         for (auto *item : m_items) {
@@ -93,6 +93,10 @@ public:
     }
 
     void redo() override {
+        if (m_alreadyMoved) {
+            m_alreadyMoved = false;
+            return;
+        }
         for (auto *item : m_items) {
             if (item->type() == StrokeItem::Type) {
                 static_cast<StrokeItem *>(item)->translateStroke(m_delta);
@@ -105,12 +109,13 @@ public:
 private:
     QList<QGraphicsItem*> m_items;
     QPointF m_delta;
+    bool m_alreadyMoved;
 };
 
 class ScaleStrokesCommand : public QUndoCommand {
 public:
-    ScaleStrokesCommand(const QList<QGraphicsItem*> &items, qreal factor, const QPointF &pivot, QUndoCommand *parent = nullptr)
-        : QUndoCommand("Escalar Elementos", parent), m_items(items), m_factor(factor), m_pivot(pivot) {}
+    ScaleStrokesCommand(const QList<QGraphicsItem*> &items, qreal factor, const QPointF &pivot, bool alreadyScaled = true, QUndoCommand *parent = nullptr)
+        : QUndoCommand("Escalar Elementos", parent), m_items(items), m_factor(factor), m_pivot(pivot), m_alreadyScaled(alreadyScaled) {}
 
     void undo() override {
         if (std::abs(m_factor) > 1e-4) {
@@ -125,6 +130,10 @@ public:
     }
 
     void redo() override {
+        if (m_alreadyScaled) {
+            m_alreadyScaled = false;
+            return;
+        }
         for (auto *item : m_items) {
             if (item->type() == StrokeItem::Type) {
                 static_cast<StrokeItem *>(item)->scaleStroke(m_factor, m_pivot);
@@ -138,6 +147,7 @@ private:
     QList<QGraphicsItem*> m_items;
     qreal m_factor;
     QPointF m_pivot;
+    bool m_alreadyScaled;
 };
 
 class ChangeColorCommand : public QUndoCommand {

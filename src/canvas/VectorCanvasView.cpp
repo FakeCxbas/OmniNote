@@ -608,12 +608,14 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
             m_isTabletStroke = false;
             m_lastTabletTimeMs = QDateTime::currentMSecsSinceEpoch();
             m_canvasScene->handlePointerRelease(scenePos, 0.0, tx, ty, isEraser);
+            updateSelectionActionBarPosition();
         }
         if (m_stylusLassoActive && !(event->buttons() & Qt::MiddleButton)) {
             m_stylusLassoActive = false;
             m_canvasScene->setCurrentTool(m_preStylusTool);
         }
         emit pressureChanged(0.0);
+        updateSelectionActionBarPosition();
         event->accept();
         break;
 
