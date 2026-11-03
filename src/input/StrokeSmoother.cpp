@@ -289,6 +289,10 @@ QPolygonF StrokeSmoother::generateRibbonPolygon(const QVector<StrokePoint> &poin
         ribbon << rightEdge[i];
     }
 
+    if (!ribbon.isEmpty() && ribbon.first() != ribbon.last()) {
+        ribbon << ribbon.first();
+    }
+
     return ribbon;
 }
 

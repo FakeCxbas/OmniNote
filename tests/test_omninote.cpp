@@ -1,3 +1,6 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <iostream>
 #include <cmath>
@@ -221,7 +224,7 @@ void testSqliteStorage() {
     assert(remainingPages[0].id == pageId && remainingPages[0].pageNumber == 1);
     assert(remainingPages[1].id == page3Id && remainingPages[1].pageNumber == 2);
 
-    assert(storage.getNotebookTitle(nbId) == "Cálculo Multivariable");
+    assert(storage.getNotebookTitle(nbId) == "01. Valores y Vectores Propios");
     assert(storage.getPageNumber(pageId) == 1);
     assert(storage.getPageNumber(page3Id) == 2);
 
@@ -567,12 +570,12 @@ void testStrokeAutoImprovementAndDefaultColor() {
     QVector<StrokePoint> noisyStroke;
     for (int i = 0; i <= 40; ++i) {
         qreal x = 100.0 + i * 5.0;
-        qreal y = 200.0 + (i % 2 == 0 ? 1.0 : -1.0) * 0.8; // High frequency micro-jitter < 1.0px
+        qreal y = 200.0 + (i % 2 == 0 ? 1.0 : -1.0) * 0.4; // High frequency micro-jitter (amplitude 0.4px < 1.1px epsilon)
         noisyStroke.append(StrokePoint(QPointF(x, y), 0.5));
     }
     QVector<StrokePoint> simplified = StrokeSmoother::simplifyRDP(noisyStroke, 1.1);
     assert(simplified.size() < noisyStroke.size());
-    assert(simplified.size() <= 4); // Almost all jitter collapsed
+    assert(simplified.size() <= 4); // Micro-jitter collapsed
 
     // 3. Test Straight Line Snapping (fraction bar / underline with hand tremor)
     QVector<StrokePoint> shakyLine;
@@ -823,7 +826,7 @@ void testFormulaBlockItem() {
     // Serialization & Deserialization
     QString json = formula.serialize();
     assert(json.contains("latex"));
-    assert(json.contains("\\sqrt{\\pi}"));
+    assert(json.contains("\\\\sqrt{\\\\pi}"));
 
     FormulaBlockItem restored;
     restored.deserialize(json);

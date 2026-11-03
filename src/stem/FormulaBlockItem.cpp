@@ -278,6 +278,8 @@ void FormulaBlockItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
 
 QString FormulaBlockItem::serialize() const {
     QJsonObject root;
+    root["x"] = pos().x();
+    root["y"] = pos().y();
     root["latex"] = m_latex;
     root["color"] = m_color.name();
     root["w"] = m_rect.width();
@@ -289,6 +291,9 @@ void FormulaBlockItem::deserialize(const QString &data) {
     QJsonDocument doc = QJsonDocument::fromJson(data.toUtf8());
     if (!doc.isNull() && doc.isObject()) {
         QJsonObject root = doc.object();
+        if (root.contains("x") && root.contains("y")) {
+            setPos(root["x"].toDouble(), root["y"].toDouble());
+        }
         m_latex = root["latex"].toString();
         if (root.contains("color")) {
             m_color = QColor(root["color"].toString());
