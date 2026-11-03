@@ -21,6 +21,7 @@
 #include "src/canvas/ColorPaletteControl.hpp"
 #include "src/stem/ImageBlockItem.hpp"
 #include "src/stem/FormulaBlockItem.hpp"
+#include "src/stem/FunctionPlotItem.hpp"
 #include "src/canvas/VirtualRulerItem.hpp"
 #include "src/app/AppIcons.hpp"
 #include "src/sync/GoogleDriveSync.hpp"
@@ -1185,6 +1186,50 @@ int main(int argc, char *argv[]) {
         }
         p.end();
         preview.save("/home/fakecxbas/.gemini/antigravity/brain/cd378ad1-72ef-4f57-ad6a-e9e23ecc1374/icons_preview.png");
+    }
+
+    // Render visual inspection artifacts for Page 7 and Page 8
+    {
+        SqliteStorage storage;
+        if (storage.open("/home/fakecxbas/.local/share/OmniNote/OmniNote/omninote_stem.omninote")) {
+            auto pages = storage.getPages(1);
+            for (const auto &pRec : pages) {
+                if (pRec.pageNumber != 7 && pRec.pageNumber != 8) continue;
+                VectorCanvasScene scene(1240, 1754);
+                scene.setBackgroundType(BackgroundType::CalculusGrid);
+                QVector<StrokeRecord> strokes;
+                QVector<StemBlockRecord> blocks;
+                storage.loadPageData(pRec.id, strokes, blocks);
+                for (const auto &sr : strokes) {
+                    auto *s = StrokeItem::deserialize(sr.blobData);
+                    if (s) scene.addItem(s);
+                }
+                for (const auto &br : blocks) {
+                    if (br.blockType == 1) {
+                        auto *p = new FunctionPlotItem();
+                        p->deserialize(br.data);
+                        scene.addItem(p);
+                    } else if (br.blockType == 2) {
+                        auto *t = new TextBlockItem(QPointF(br.x, br.y));
+                        t->deserialize(br.data);
+                        scene.addItem(t);
+                    } else if (br.blockType == 4) {
+                        auto *f = new FormulaBlockItem();
+                        f->deserialize(br.data);
+                        scene.addItem(f);
+                    }
+                }
+                QImage img(1240, 1754, QImage::Format_ARGB32_Premultiplied);
+                img.fill(QColor("#14161c"));
+                QPainter painter(&img);
+                painter.setRenderHint(QPainter::Antialiasing, true);
+                painter.setRenderHint(QPainter::TextAntialiasing, true);
+                scene.render(&painter, QRectF(0, 0, 1240, 1754), QRectF(0, 0, 1240, 1754));
+                painter.end();
+                QString out = QString("/home/fakecxbas/.gemini/antigravity/brain/cd378ad1-72ef-4f57-ad6a-e9e23ecc1374/page%1_preview.png").arg(pRec.pageNumber);
+                img.save(out);
+            }
+        }
     }
 
     std::cout << "\n>>> ALL 19 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
