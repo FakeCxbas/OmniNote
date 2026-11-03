@@ -123,7 +123,13 @@ void FormulaBlockItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *
     // 2. Render Mathematical Formula Pixmap (Crisp, High-DPI Vector Math)
     if (!m_renderedPixmap.isNull()) {
         QRectF formulaArea = m_rect.adjusted(12.0, 10.0, -12.0, -10.0);
-        painter->drawPixmap(formulaArea.toRect(), m_renderedPixmap);
+        qreal dpr = m_renderedPixmap.devicePixelRatio();
+        if (dpr <= 0.0) dpr = 1.0;
+        QSizeF naturalSize = QSizeF(m_renderedPixmap.width() / dpr, m_renderedPixmap.height() / dpr);
+        QSizeF drawSize = naturalSize.scaled(formulaArea.size(), Qt::KeepAspectRatio);
+        QRectF drawRect(formulaArea.left(), formulaArea.top() + (formulaArea.height() - drawSize.height()) * 0.5,
+                        drawSize.width(), drawSize.height());
+        painter->drawPixmap(drawRect.toRect(), m_renderedPixmap);
     } else {
         painter->setPen(QColor("#7aa2f7"));
         painter->setFont(QFont("Sans-Serif", 11));

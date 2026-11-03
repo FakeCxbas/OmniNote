@@ -39,6 +39,15 @@ def main():
                 
                 # Replace literal newlines with space unless escaped
                 latex_clean = ' '.join(latex_clean.splitlines()).strip()
+
+                # Normalize common LaTeX idioms for MathTextParser compatibility
+                import re
+                latex_clean = re.sub(r'\\text\{([^}]+)\}', r'\\mathrm{\1}', latex_clean)
+                latex_clean = latex_clean.replace(r'\implies', r'\Rightarrow')
+                latex_clean = re.sub(r'\\ge(?![a-zA-Z])', r'\\geq', latex_clean)
+                latex_clean = re.sub(r'\\le(?![a-zA-Z])', r'\\leq', latex_clean)
+                latex_clean = latex_clean.replace(r'\mathbb{R}', r'\mathbf{R}')
+
                 latex_clean = '$' + latex_clean + '$'
 
                 res = parser.parse(latex_clean, dpi=dpi)

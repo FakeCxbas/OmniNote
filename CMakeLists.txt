@@ -112,6 +112,10 @@ install(TARGETS OmniNoteSTEM
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+install(PROGRAMS src/stem/render_latex.py
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
 install(FILES assets/org.omninote.OmniNote.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
@@ -139,6 +143,7 @@ set(TEST_SOURCES
     src/stem/TextBlockItem.cpp
     src/stem/ImageBlockItem.cpp
     src/stem/FormulaBlockItem.cpp
+    src/stem/FunctionPlotItem.cpp
     src/stem/LatexRenderer.cpp
     src/app/AppIcons.cpp
     src/canvas/VirtualRulerItem.cpp

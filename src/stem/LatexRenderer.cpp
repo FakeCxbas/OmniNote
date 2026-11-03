@@ -21,9 +21,10 @@ LatexRenderer::LatexRenderer() {
     // Search candidates for render_latex.py
     const QStringList candidates = {
         QCoreApplication::applicationDirPath() + "/render_latex.py",
-        QCoreApplication::applicationDirPath() + "/../OmniNoteSTEM/src/stem/render_latex.py",
-        QDir::currentPath() + "/OmniNoteSTEM/src/stem/render_latex.py",
-        "/home/fakecxbas/Proyectos/Apuntes/OmniNoteSTEM/src/stem/render_latex.py"
+        QCoreApplication::applicationDirPath() + "/../src/stem/render_latex.py",
+        QDir::currentPath() + "/src/stem/render_latex.py",
+        "/home/fakecxbas/Proyectos/Apuntes/src/stem/render_latex.py",
+        "/home/fakecxbas/.local/bin/render_latex.py"
     };
 
     for (const auto &path : candidates) {
