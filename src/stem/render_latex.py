@@ -42,7 +42,9 @@ def main():
 
                 # Normalize common LaTeX idioms for MathTextParser compatibility
                 import re
-                latex_clean = re.sub(r'\\text\{([^}]+)\}', r'\\mathrm{\1}', latex_clean)
+                def _text_to_mathrm(match):
+                    return r'\mathrm{' + match.group(1).replace(' ', r'\ ') + '}'
+                latex_clean = re.sub(r'\\text\{([^}]+)\}', _text_to_mathrm, latex_clean)
                 latex_clean = latex_clean.replace(r'\implies', r'\Rightarrow')
                 latex_clean = re.sub(r'\\ge(?![a-zA-Z])', r'\\geq', latex_clean)
                 latex_clean = re.sub(r'\\le(?![a-zA-Z])', r'\\leq', latex_clean)
