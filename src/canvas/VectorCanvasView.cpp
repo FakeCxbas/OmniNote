@@ -380,6 +380,18 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
     QGraphicsView::mousePressEvent(event);
 }
 
+void VectorCanvasView::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && m_canvasScene) {
+        QPointF scenePos = mapToSceneF(event->position());
+        if (m_canvasScene->isHeaderTitleHit(scenePos)) {
+            emit m_canvasScene->headerTitleEditRequested();
+            event->accept();
+            return;
+        }
+    }
+    QGraphicsView::mouseDoubleClickEvent(event);
+}
+
 void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
     if (m_isPanning) {
         QPoint delta = event->pos() - m_panStartPos;
@@ -431,6 +443,12 @@ void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
             viewport()->setCursor(m_currentToolCursor);
             setCursor(m_currentToolCursor);
         }
+    } else if (m_canvasScene && m_canvasScene->isHeaderTitleHit(scenePos) && !m_spacePressed && !m_isPanning) {
+        viewport()->setCursor(Qt::PointingHandCursor);
+        setCursor(Qt::PointingHandCursor);
+    } else if (cursor().shape() == Qt::PointingHandCursor && !m_spacePressed && !m_isPanning) {
+        viewport()->setCursor(m_currentToolCursor);
+        setCursor(m_currentToolCursor);
     }
 
     if ((event->buttons() & (Qt::LeftButton | Qt::RightButton | Qt::MiddleButton)) && m_canvasScene) {
