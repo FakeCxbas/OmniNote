@@ -29,10 +29,10 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
 
     // Canva-style adaptive alpha: responsive near-zero latency while eliminating digitizer jitter
     qreal adaptiveAlpha = m_alpha;
-    if (dist < 2.5) {
-        adaptiveAlpha = qBound(0.74, m_alpha * (0.92 + 0.08 * (dist / 2.5)), 0.88);
+    if (dist < 3.0) {
+        adaptiveAlpha = qBound(0.68, m_alpha * (0.85 + 0.15 * (dist / 3.0)), 0.82);
     } else if (dist > 8.0) {
-        adaptiveAlpha = qMin(1.0, m_alpha + 0.15);
+        adaptiveAlpha = qMin(0.96, m_alpha + 0.12);
     }
 
     m_filteredPos.setX(m_filteredPos.x() + adaptiveAlpha * (rawPoint.pos.x() - m_filteredPos.x()));
@@ -55,6 +55,7 @@ QVector<bool> StrokeSmoother::detectCorners(const QVector<StrokePoint> &pts, qre
     isCorner.last() = true;
 
     QVector<qreal> dotProducts(n, 1.0);
+    QVector<qreal> shortDots(n, 1.0);
 
     for (int i = 1; i < n - 1; ++i) {
         int idxA = i - 1;
@@ -81,14 +82,43 @@ QVector<bool> StrokeSmoother::detectCorners(const QVector<StrokePoint> &pts, qre
         qreal len2 = std::hypot(v2.x(), v2.y());
 
         if (len1 > 0.5 && len2 > 0.5) {
-            qreal dot = (v1.x() * v2.x() + v1.y() * v2.y()) / (len1 * len2);
-            dotProducts[i] = dot;
+            dotProducts[i] = (v1.x() * v2.x() + v1.y() * v2.y()) / (len1 * len2);
+        }
+
+        // Measure short-span (immediate vertex) chord vectors to separate genuine sharp kinks from smooth continuous curves
+        const qreal shortSpan = qMin(targetSpan * 0.45, 2.8);
+        int sIdxA = i - 1;
+        qreal sDistA = 0.0;
+        while (sIdxA > 0) {
+            sDistA += std::hypot(pts[sIdxA].pos.x() - pts[sIdxA + 1].pos.x(),
+                                 pts[sIdxA].pos.y() - pts[sIdxA + 1].pos.y());
+            if (sDistA >= shortSpan) break;
+            --sIdxA;
+        }
+
+        int sIdxB = i + 1;
+        qreal sDistB = 0.0;
+        while (sIdxB < n - 1) {
+            sDistB += std::hypot(pts[sIdxB].pos.x() - pts[sIdxB - 1].pos.x(),
+                                 pts[sIdxB].pos.y() - pts[sIdxB - 1].pos.y());
+            if (sDistB >= shortSpan) break;
+            ++sIdxB;
+        }
+
+        QPointF sv1 = pts[i].pos - pts[sIdxA].pos;
+        QPointF sv2 = pts[sIdxB].pos - pts[i].pos;
+        qreal slen1 = std::hypot(sv1.x(), sv1.y());
+        qreal slen2 = std::hypot(sv2.x(), sv2.y());
+        if (slen1 > 0.25 && slen2 > 0.25) {
+            shortDots[i] = (sv1.x() * sv2.x() + sv1.y() * sv2.y()) / (slen1 * slen2);
         }
     }
 
     // Detect true vertices at curvature inflection points
     for (int i = 1; i < n - 1; ++i) {
-        if (dotProducts[i] < minTurnCos) {
+        // True sharp corners require both macro turn (dotProducts < minTurnCos) AND micro sharp kink (shortDots < 0.60)
+        // Continuous curves like integral hooks, 'U', 'C', 'S' have smooth micro arcs (shortDots >= 0.70)
+        if (dotProducts[i] < minTurnCos && shortDots[i] < 0.60) {
             bool isLocalMin = true;
             for (int k = qMax(0, i - 2); k <= qMin(n - 1, i + 2); ++k) {
                 if (dotProducts[k] < dotProducts[i] - 1e-4) {
@@ -144,8 +174,8 @@ QVector<StrokePoint> StrokeSmoother::interpolateCatmullRom(const QVector<StrokeP
         return pts;
     }
 
-    // Apply corner-preserving spatial stabilizer to suppress hand tremor while keeping mathematical vertices intact
-    const QVector<StrokePoint> smoothPts = (n >= 4) ? stabilizePoints(pts, 1) : pts;
+    // Apply corner-preserving spatial stabilizer on dense strokes while keeping coarse control points intact
+    const QVector<StrokePoint> smoothPts = (n >= 6) ? stabilizePoints(pts, 1) : pts;
     const QVector<bool> corners = detectCorners(smoothPts);
 
     QVector<StrokePoint> result;
@@ -501,12 +531,14 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
         }
     }
 
-    // Step 2: Scale-adaptive RDP simplification (enhanced assistance for clean contours)
-    qreal epsilon = 0.50;
+    // Step 2: Scale-adaptive RDP simplification (subpixel contour clean-up without decimating curves)
+    qreal epsilon = 0.32;
     if (diag < 25.0 || arcLength < 35.0) {
-        epsilon = qBound(0.15, diag * 0.014, 0.30);
+        epsilon = qBound(0.12, diag * 0.010, 0.22);
     } else if (diag < 60.0) {
-        epsilon = qBound(0.30, diag * 0.011, 0.50);
+        epsilon = qBound(0.18, diag * 0.008, 0.28);
+    } else {
+        epsilon = qBound(0.24, diag * 0.005, 0.36);
     }
 
     QVector<StrokePoint> simplified = simplifyRDP(pts, epsilon);
@@ -519,22 +551,25 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
     // Step 3: Salient Corner Detection (preserve sharp corners like in '4', '7', 'z', and square roots)
     QVector<bool> isCorner = detectCorners(simplified);
 
-    // Step 4: Corner-preserving gentle binomial filter (enhanced weights 0.12 / 0.18)
-    const qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.12 : 0.18;
+    // Step 4: Corner-preserving gentle binomial filter (2 passes for smooth, elegant curve flow)
+    const qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.15 : 0.20;
     const qreal centerWeight = 1.0 - 2.0 * sideWeight;
 
     QVector<StrokePoint> cur = simplified;
-    QVector<StrokePoint> next = cur;
-    for (int i = 1; i < m - 1; ++i) {
-        if (isCorner[i]) {
-            next[i] = cur[i];
-        } else {
-            next[i].pos = sideWeight * cur[i - 1].pos + centerWeight * cur[i].pos + sideWeight * cur[i + 1].pos;
-            next[i].pressure = sideWeight * cur[i - 1].pressure + centerWeight * cur[i].pressure + sideWeight * cur[i + 1].pressure;
+    for (int pass = 0; pass < 2; ++pass) {
+        QVector<StrokePoint> next = cur;
+        for (int i = 1; i < m - 1; ++i) {
+            if (isCorner[i]) {
+                next[i] = cur[i];
+            } else {
+                next[i].pos = sideWeight * cur[i - 1].pos + centerWeight * cur[i].pos + sideWeight * cur[i + 1].pos;
+                next[i].pressure = sideWeight * cur[i - 1].pressure + centerWeight * cur[i].pressure + sideWeight * cur[i + 1].pressure;
+            }
         }
+        cur = next;
     }
 
-    return next;
+    return cur;
 }
 
 } // namespace OmniNote
