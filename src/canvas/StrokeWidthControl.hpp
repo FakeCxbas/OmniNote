@@ -24,7 +24,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    double m_width{1.5};
+    double m_width{3.5};
     QColor m_color{QColor("#7aa2f7")};
 };
 
@@ -51,10 +51,14 @@ protected:
 private:
     void updatePresetStates(double w);
 
-    QPushButton *m_btnFino{nullptr};
-    QPushButton *m_btnNormal{nullptr};
-    QPushButton *m_btnGrueso{nullptr};
+    QPushButton *m_btnP25{nullptr};
+    QPushButton *m_btnP30{nullptr};
+    QPushButton *m_btnP35{nullptr};
+    QPushButton *m_btnP40{nullptr};
     QPushButton *m_btnMarcador{nullptr};
+
+    QPushButton *m_btnStepDown{nullptr};
+    QPushButton *m_btnStepUp{nullptr};
 
     QSlider *m_slider{nullptr};
     QLabel *m_valLabel{nullptr};

@@ -80,43 +80,51 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
         "   color: #ffffff;"
         "}";
 
-    // Preset 1: Fino (1.5 px)
-    m_btnFino = new QPushButton("•", this);
-    m_btnFino->setCheckable(true);
-    m_btnFino->setStyleSheet(btnStyle);
-    m_btnFino->setToolTip("Fino (1.5 px) — Ideal para detalles, subíndices y fórmulas");
-    connect(m_btnFino, &QPushButton::clicked, this, [this]() { setWidth(1.5); });
-    layout->addWidget(m_btnFino);
+    // Preset 1: Fino (2.5 px)
+    m_btnP25 = new QPushButton("•", this);
+    m_btnP25->setCheckable(true);
+    m_btnP25->setStyleSheet(btnStyle);
+    m_btnP25->setToolTip("Fino (2.5 px) — Fórmulas compactas y subíndices");
+    connect(m_btnP25, &QPushButton::clicked, this, [this]() { setWidth(2.5); });
+    layout->addWidget(m_btnP25);
 
-    // Preset 2: Normal (2.5 px)
-    m_btnNormal = new QPushButton("●", this);
-    m_btnNormal->setCheckable(true);
-    m_btnNormal->setStyleSheet(btnStyle);
-    m_btnNormal->setToolTip("Normal (2.5 px) — Escritura regular de apuntes");
-    connect(m_btnNormal, &QPushButton::clicked, this, [this]() { setWidth(2.5); });
-    layout->addWidget(m_btnNormal);
+    // Preset 2: Medio-Fino (3.0 px)
+    m_btnP30 = new QPushButton("●", this);
+    m_btnP30->setCheckable(true);
+    m_btnP30->setStyleSheet(btnStyle);
+    m_btnP30->setToolTip("Medio-Fino (3.0 px) — Escritura ágil");
+    connect(m_btnP30, &QPushButton::clicked, this, [this]() { setWidth(3.0); });
+    layout->addWidget(m_btnP30);
 
-    // Preset 3: Grueso (5.0 px)
-    m_btnGrueso = new QPushButton("⬤", this);
-    m_btnGrueso->setCheckable(true);
-    m_btnGrueso->setStyleSheet(btnStyle);
-    m_btnGrueso->setToolTip("Grueso (5.0 px) — Títulos y diagramas");
-    connect(m_btnGrueso, &QPushButton::clicked, this, [this]() { setWidth(5.0); });
-    layout->addWidget(m_btnGrueso);
+    // Preset 3: Estándar Canva (3.5 px)
+    m_btnP35 = new QPushButton("⬤", this);
+    m_btnP35->setCheckable(true);
+    m_btnP35->setStyleSheet(btnStyle);
+    m_btnP35->setToolTip("Normal Canva (3.5 px) — Escritura regular de apuntes STEM");
+    connect(m_btnP35, &QPushButton::clicked, this, [this]() { setWidth(3.5); });
+    layout->addWidget(m_btnP35);
 
-    // Preset 4: Marcador (10.0 px)
+    // Preset 4: Énfasis (4.0 px)
+    m_btnP40 = new QPushButton("⬤", this);
+    m_btnP40->setCheckable(true);
+    m_btnP40->setStyleSheet(btnStyle);
+    m_btnP40->setToolTip("Énfasis (4.0 px) — Palabras clave y diagramas");
+    connect(m_btnP40, &QPushButton::clicked, this, [this]() { setWidth(4.0); });
+    layout->addWidget(m_btnP40);
+
+    // Preset 5: Marcador (10.0 px)
     m_btnMarcador = new QPushButton("▉", this);
     m_btnMarcador->setCheckable(true);
     m_btnMarcador->setStyleSheet(btnStyle);
-    m_btnMarcador->setToolTip("Marcador (10.0 px) — Títulos grandes y énfasis");
+    m_btnMarcador->setToolTip("Marcador (10.0 px) — Títulos grandes y resaltados");
     connect(m_btnMarcador, &QPushButton::clicked, this, [this]() { setWidth(10.0); });
     layout->addWidget(m_btnMarcador);
 
     // Fluid Interactive Slider (1 to 60 -> 0.5 px to 30.0 px)
     m_slider = new QSlider(Qt::Horizontal, this);
     m_slider->setRange(1, 60);
-    m_slider->setValue(3); // 1.5 px (Canva pen handwriting standard)
-    m_slider->setFixedWidth(70);
+    m_slider->setValue(7); // 3.5 px (Canva pen handwriting standard)
+    m_slider->setFixedWidth(65);
     m_slider->setToolTip("Desliza para ajustar grosor o usa la rueda del ratón");
     m_slider->setStyleSheet(
         "QSlider::groove:horizontal {"
@@ -144,8 +152,37 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
     );
     layout->addWidget(m_slider);
 
+    const QString stepBtnStyle =
+        "QPushButton {"
+        "   background-color: #24283b;"
+        "   color: #c0caf5;"
+        "   border: 1px solid #3b4261;"
+        "   border-radius: 3px;"
+        "   font-size: 8.5pt;"
+        "   font-weight: bold;"
+        "   min-width: 18px;"
+        "   max-width: 18px;"
+        "   height: 20px;"
+        "   padding: 0px;"
+        "}"
+        "QPushButton:hover {"
+        "   background-color: #2f3549;"
+        "   border-color: #7aa2f7;"
+        "   color: #ffffff;"
+        "}"
+        "QPushButton:pressed {"
+        "   background-color: #3d59a1;"
+        "}";
+
+    // Step down button (-0.5 px)
+    m_btnStepDown = new QPushButton("−", this);
+    m_btnStepDown->setStyleSheet(stepBtnStyle);
+    m_btnStepDown->setToolTip("Reducir grosor (-0.5 px) [Atajo: []");
+    connect(m_btnStepDown, &QPushButton::clicked, this, &StrokeWidthControl::stepDown);
+    layout->addWidget(m_btnStepDown);
+
     // Value badge
-    m_valLabel = new QLabel("1.5 px", this);
+    m_valLabel = new QLabel("3.5 px", this);
     m_valLabel->setFixedWidth(46);
     m_valLabel->setAlignment(Qt::AlignCenter);
     m_valLabel->setStyleSheet(
@@ -161,8 +198,16 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
     );
     layout->addWidget(m_valLabel);
 
+    // Step up button (+0.5 px)
+    m_btnStepUp = new QPushButton("+", this);
+    m_btnStepUp->setStyleSheet(stepBtnStyle);
+    m_btnStepUp->setToolTip("Aumentar grosor (+0.5 px) [Atajo: ]]");
+    connect(m_btnStepUp, &QPushButton::clicked, this, &StrokeWidthControl::stepUp);
+    layout->addWidget(m_btnStepUp);
+
     // Live preview disc
     m_preview = new StrokeWidthPreview(this);
+    m_preview->setWidth(3.5);
     layout->addWidget(m_preview);
 
     connect(m_slider, &QSlider::valueChanged, this, [this](int val) {
@@ -173,11 +218,11 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
         emit widthChanged(w);
     });
 
-    updatePresetStates(1.5);
+    updatePresetStates(3.5);
 }
 
 double StrokeWidthControl::currentWidth() const {
-    return m_slider ? (m_slider->value() * 0.5) : 1.5;
+    return m_slider ? (m_slider->value() * 0.5) : 3.5;
 }
 
 void StrokeWidthControl::setWidth(double w) {
@@ -226,9 +271,10 @@ void StrokeWidthControl::updatePresetStates(double w) {
         return std::abs(w - target) < 0.15;
     };
 
-    if (m_btnFino) m_btnFino->setChecked(match(1.5) || match(1.0));
-    if (m_btnNormal) m_btnNormal->setChecked(match(2.5));
-    if (m_btnGrueso) m_btnGrueso->setChecked(match(5.0));
+    if (m_btnP25) m_btnP25->setChecked(match(2.5));
+    if (m_btnP30) m_btnP30->setChecked(match(3.0));
+    if (m_btnP35) m_btnP35->setChecked(match(3.5));
+    if (m_btnP40) m_btnP40->setChecked(match(4.0));
     if (m_btnMarcador) m_btnMarcador->setChecked(match(10.0));
 }
 

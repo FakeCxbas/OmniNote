@@ -22,7 +22,7 @@ VectorCanvasScene::VectorCanvasScene(qreal width, qreal height, QObject *parent)
       m_bgType(BackgroundType::CalculusGrid),
       m_currentTool(ToolType::Pen),
       m_currentColor(QColor("#ffffff")),
-      m_currentBaseWidth(1.5) {
+      m_currentBaseWidth(3.5) {
     setSceneRect(0, 0, m_pageSize.width(), m_pageSize.height());
     connect(&m_undoStack, &QUndoStack::cleanChanged, this, [this](bool clean) {
         if (!clean) {
