@@ -70,6 +70,7 @@ Thumbs.db
 # User data and local test files
 *.omninote
 *.log
+*.pdf
 gdrive_credentials.json
 test_*.png
 rendered_*.png

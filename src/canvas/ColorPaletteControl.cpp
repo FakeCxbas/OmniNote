@@ -170,4 +170,41 @@ void ColorPaletteControl::setCustomColor(const QColor &color) {
     }
 }
 
+void ColorPaletteControl::setLightMode(bool isLight) {
+    if (m_isLightMode == isLight) return;
+    m_isLightMode = isLight;
+
+    const QVector<QPair<QString, QColor>> lightPresets = {
+        {"Azul Canva (#002b80)", QColor("#002b80")},
+        {"Negro Tinta (#111827)", QColor("#111827")},
+        {"Azul Real (#1d4ed8)", QColor("#1d4ed8")},
+        {"Verde Bosque (#15803d)", QColor("#15803d")},
+        {"Rojo Carmín (#dc2626)", QColor("#dc2626")},
+        {"Púrpura Intenso (#7e22ce)", QColor("#7e22ce")},
+        {"Ámbar Dorado (#b45309)", QColor("#b45309")},
+        {"Turquesa (#0f766e)", QColor("#0f766e")},
+        {"Fucsia (#be185d)", QColor("#be185d")}
+    };
+
+    const QVector<QPair<QString, QColor>> darkPresets = {
+        {"Blanco (#ffffff)", QColor("#ffffff")},
+        {"Lavanda (#c0caf5)", QColor("#c0caf5")},
+        {"Azul (#7aa2f7)", QColor("#7aa2f7")},
+        {"Verde (#9ece6a)", QColor("#9ece6a")},
+        {"Naranja (#ff9e64)", QColor("#ff9e64")},
+        {"Violeta (#bb9af7)", QColor("#bb9af7")},
+        {"Ámbar (#e0af68)", QColor("#e0af68")},
+        {"Cian (#7dcfff)", QColor("#7dcfff")},
+        {"Coral (#f7768e)", QColor("#f7768e")}
+    };
+
+    const auto &presets = m_isLightMode ? lightPresets : darkPresets;
+    for (int i = 0; i < m_presetButtons.size() && i < presets.size(); ++i) {
+        m_presetButtons[i]->setColor(presets[i].second);
+        m_presetButtons[i]->setToolTip(presets[i].first);
+    }
+
+    setCurrentColor(m_currentColor);
+}
+
 } // namespace OmniNote

@@ -316,7 +316,7 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
         return;
     }
 
-    QPointF scenePos = mapToScene(event->pos());
+    QPointF scenePos = mapToSceneF(event->position());
     if (shouldForwardToSceneWidgets(scenePos)) {
         m_interactingWithWidget = true;
         QGraphicsView::mousePressEvent(event);
@@ -402,7 +402,7 @@ void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
     }
     qint64 now = QDateTime::currentMSecsSinceEpoch();
 
-    QPointF scenePos = mapToScene(event->pos());
+    QPointF scenePos = mapToSceneF(event->position());
     emit cursorCoordinatesChanged(scenePos);
 
     if (m_interactingWithWidget) {
@@ -496,7 +496,7 @@ void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
     if (m_stylusEraserActive && (event->button() == Qt::RightButton || event->buttons() == Qt::NoButton)) {
         m_stylusEraserActive = false;
         if (m_canvasScene) {
-            QPointF scenePos = mapToScene(event->pos());
+            QPointF scenePos = mapToSceneF(event->position());
             m_canvasScene->handlePointerRelease(scenePos, 0.0, 0.0, 0.0, true);
         }
         updateToolCursor();
@@ -508,7 +508,7 @@ void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
     if (m_stylusLassoActive && (event->button() == Qt::MiddleButton || event->buttons() == Qt::NoButton)) {
         m_stylusLassoActive = false;
         if (m_canvasScene) {
-            QPointF scenePos = mapToScene(event->pos());
+            QPointF scenePos = mapToSceneF(event->position());
             m_canvasScene->handlePointerRelease(scenePos, 0.0, 0.0, 0.0, false);
             m_canvasScene->setCurrentTool(m_preStylusTool);
         }
@@ -519,7 +519,7 @@ void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
     }
 
     if (event->button() == Qt::LeftButton && m_canvasScene) {
-        QPointF scenePos = mapToScene(event->pos());
+        QPointF scenePos = mapToSceneF(event->position());
         m_canvasScene->handlePointerRelease(scenePos, 0.0, 0.0, 0.0, false);
         emit pressureChanged(0.0);
         updateSelectionActionBarPosition();
@@ -536,8 +536,8 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
         return;
     }
 
-    // Viewport-relative coordinates from QTabletEvent
-    QPointF scenePos = mapToScene(event->position().toPoint());
+    // Viewport-relative coordinates from QTabletEvent with true sub-pixel floating point precision
+    QPointF scenePos = mapToSceneF(event->position());
 
     qreal pressure = qBound(0.05, event->pressure(), 1.0);
     qreal tx = event->xTilt();

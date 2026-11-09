@@ -236,7 +236,7 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
                 }
             }
 
-            if (uniformPressure) {
+            if (uniformPressure && pts.size() < 6) {
                 qreal w = qMax(0.6, m_baseWidth * (0.20 + 1.25 * std::pow(firstPressure, 1.2)));
                 QPen pen(m_color, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
                 painter->setPen(pen);
@@ -248,14 +248,22 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
                 }
                 painter->drawPolyline(poly);
             } else {
-                // Expressive pressure dynamics (tablet stylus or dynamic velocity pressure)
+                // Expressive pressure dynamics with subtle natural stroke tapering (Canva pen feel)
                 painter->setBrush(Qt::NoBrush);
                 qreal lastW = -1.0;
                 QPen segPen(m_color, m_baseWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
 
-                for (int i = 0; i < pts.size() - 1; ++i) {
+                const int totalSegs = pts.size() - 1;
+                for (int i = 0; i < totalSegs; ++i) {
                     qreal pAvg = qBound(0.05, (pts[i].pressure + pts[i + 1].pressure) * 0.5, 1.0);
-                    qreal segWidth = qMax(0.6, m_baseWidth * (0.20 + 1.25 * fastPow12(pAvg)));
+                    qreal taper = 1.0;
+                    if (totalSegs >= 4) {
+                        if (i == 0) taper = 0.60;
+                        else if (i == 1) taper = 0.82;
+                        else if (i == totalSegs - 1) taper = 0.45;
+                        else if (i == totalSegs - 2) taper = 0.75;
+                    }
+                    qreal segWidth = qMax(0.6, m_baseWidth * (0.20 + 1.25 * fastPow12(pAvg)) * taper);
                     if (std::abs(segWidth - lastW) > 0.04) {
                         segPen.setWidthF(segWidth);
                         painter->setPen(segPen);

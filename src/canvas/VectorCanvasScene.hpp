@@ -16,7 +16,11 @@ enum class BackgroundType {
     EngineeringMillimeter = 1,
     Isometric = 2,
     Dotted = 3,
-    Blank = 4
+    Blank = 4,
+    CanvaGrid = 5,
+    WarmSepia = 6,
+    ChalkboardGreen = 7,
+    BlankLight = 8
 };
 
 class VectorCanvasScene : public QGraphicsScene {
@@ -34,6 +38,11 @@ public:
 
     BackgroundType backgroundType() const { return m_bgType; }
     void setBackgroundType(BackgroundType type);
+    bool isLightBackground() const;
+    QColor sheetColor() const;
+    QColor deskColor() const;
+    QColor borderColor() const;
+    QColor shadowColor() const;
 
     void setPdfBackground(const QImage &img, int pageNumber = 0);
     void clearPdfBackground();

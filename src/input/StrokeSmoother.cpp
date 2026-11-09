@@ -5,7 +5,7 @@
 namespace OmniNote {
 
 StrokeSmoother::StrokeSmoother()
-    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.69) {
+    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.80) {
 }
 
 void StrokeSmoother::reset() {
@@ -27,12 +27,12 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
     qreal dy = rawPoint.pos.y() - m_filteredPos.y();
     qreal dist = std::hypot(dx, dy);
 
-    // Enhanced adaptive alpha: eliminates handwriting tremor while preserving corner agility
+    // Canva-style adaptive alpha: responsive near-zero latency while eliminating digitizer jitter
     qreal adaptiveAlpha = m_alpha;
-    if (dist < 3.0) {
-        adaptiveAlpha = qBound(0.60, m_alpha * (0.85 + 0.15 * (dist / 3.0)), 0.78);
-    } else if (dist > 12.0) {
-        adaptiveAlpha = qMin(1.0, m_alpha + 0.16);
+    if (dist < 2.5) {
+        adaptiveAlpha = qBound(0.74, m_alpha * (0.92 + 0.08 * (dist / 2.5)), 0.88);
+    } else if (dist > 8.0) {
+        adaptiveAlpha = qMin(1.0, m_alpha + 0.15);
     }
 
     m_filteredPos.setX(m_filteredPos.x() + adaptiveAlpha * (rawPoint.pos.x() - m_filteredPos.x()));

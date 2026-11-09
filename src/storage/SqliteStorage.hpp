@@ -84,7 +84,7 @@ public:
     // Pages
     QVector<PageRecord> getPages(qint64 notebookId);
     qint64 addPage(qint64 notebookId, int pageNumber, qreal width = 1240.0, qreal height = 1754.0,
-                   int bgType = 0, int pdfPage = -1, const QString &pdfPath = "");
+                   int bgType = 5, int pdfPage = -1, const QString &pdfPath = "");
     bool updatePageBackground(qint64 pageId, int bgType);
     bool deletePage(qint64 pageId);
     int getPageNumber(qint64 pageId);
