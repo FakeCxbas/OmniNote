@@ -171,7 +171,7 @@ void VectorCanvasView::updateToolCursor() {
 
     ToolType tool = m_canvasScene ? m_canvasScene->currentTool() : ToolType::Pen;
     QColor color = m_canvasScene ? m_canvasScene->currentColor() : QColor("#ffffff");
-    qreal width = m_canvasScene ? m_canvasScene->currentBaseWidth() : 1.5;
+    qreal width = m_canvasScene ? m_canvasScene->currentBaseWidth() : 3.5;
 
     m_currentToolCursor = CanvasCursorFactory::createCursor(tool, color, width);
     viewport()->setCursor(m_currentToolCursor);
