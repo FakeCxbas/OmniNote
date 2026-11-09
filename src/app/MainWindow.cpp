@@ -593,9 +593,6 @@ void MainWindow::onGridTypeChanged(int index) {
     if (bgType == BackgroundType::CanvaGrid) {
         updateCanvasHeaderTitle();
     }
-    if (m_canvasView) {
-        m_canvasView->setBackgroundBrush(m_currentScene->deskColor());
-    }
     markModified();
 }
 

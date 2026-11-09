@@ -88,7 +88,6 @@ VectorCanvasView::VectorCanvasView(VectorCanvasScene *scene, QWidget *parent)
 
     if (m_canvasScene) {
         setSceneRect(m_canvasScene->pageRect().adjusted(-80, -80, 80, 80));
-        setBackgroundBrush(m_canvasScene->deskColor());
         connect(m_canvasScene, &VectorCanvasScene::cursorMoved, this, &VectorCanvasView::cursorCoordinatesChanged);
         connect(m_canvasScene, &VectorCanvasScene::toolChanged, this, &VectorCanvasView::updateToolCursor);
         connect(m_canvasScene, &VectorCanvasScene::colorChanged, this, &VectorCanvasView::updateToolCursor);
@@ -163,9 +162,6 @@ void VectorCanvasView::updateToolCursor() {
 }
 
 void VectorCanvasView::drawBackground(QPainter *painter, const QRectF &rect) {
-    if (m_canvasScene) {
-        painter->fillRect(rect, m_canvasScene->deskColor());
-    }
     QGraphicsView::drawBackground(painter, rect);
 }
 
