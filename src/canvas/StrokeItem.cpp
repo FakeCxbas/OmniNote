@@ -8,11 +8,14 @@
 
 namespace OmniNote {
 
-static inline qreal fastPow12(qreal p) {
+static inline qreal fastCanvaPressureFactor(qreal p) {
     static const auto lut = []() {
         std::array<qreal, 256> table;
         for (int i = 0; i < 256; ++i) {
-            table[i] = std::pow(static_cast<qreal>(i) / 255.0, 1.2);
+            qreal normalizedP = static_cast<qreal>(i) / 255.0;
+            // Canva pen dynamics: solid ink body with natural organic modulation
+            // p=0.0 -> 0.78, p=0.5 -> 0.985 (~1.00), p=1.0 -> 1.22
+            table[i] = 0.78 + 0.44 * std::pow(normalizedP, 1.1);
         }
         return table;
     }();
@@ -79,7 +82,7 @@ void StrokeItem::addPointFast(const StrokePoint &pt) {
     m_points.append(pt);
     m_smoothedPoints.append(pt);
 
-    const qreal widthMultiplier = (m_toolType == ToolType::Highlighter) ? 3.2 : 1.0;
+    const qreal widthMultiplier = (m_toolType == ToolType::Highlighter) ? 3.2 : 1.35;
     const qreal pad = m_baseWidth * widthMultiplier + 8.0;
     QRectF ptRect(pt.pos.x() - pad, pt.pos.y() - pad, 2.0 * pad, 2.0 * pad);
 
@@ -156,7 +159,7 @@ void StrokeItem::rebuildGeometry() {
             if (p.pos.y() < minY) minY = p.pos.y();
             if (p.pos.y() > maxY) maxY = p.pos.y();
         }
-        const qreal pad = m_baseWidth * widthMultiplier + 8.0;
+        const qreal pad = m_baseWidth * widthMultiplier * 1.35 + 8.0;
         m_boundingRect = QRectF(minX - pad, minY - pad, (maxX - minX) + 2.0 * pad, (maxY - minY) + 2.0 * pad);
 
     } else if (m_toolType == ToolType::ShapeLine) {
@@ -220,8 +223,8 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
     } else if (m_toolType == ToolType::Pen) {
         const auto &pts = m_smoothedPoints.isEmpty() ? m_points : m_smoothedPoints;
         if (pts.size() == 1) {
-            qreal pr = qBound(0.05, pts[0].pressure, 1.0);
-            qreal r = qMax(0.6, m_baseWidth * (0.20 + 1.25 * std::pow(pr, 1.2)) * 0.5);
+            qreal pr = qBound(0.0, pts[0].pressure, 1.0);
+            qreal r = qMax(0.8, m_baseWidth * fastCanvaPressureFactor(pr) * 0.5);
             painter->setPen(Qt::NoPen);
             painter->setBrush(m_color);
             painter->drawEllipse(pts[0].pos, r, r);
@@ -237,7 +240,7 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
             }
 
             if (uniformPressure && pts.size() < 6) {
-                qreal w = qMax(0.6, m_baseWidth * (0.20 + 1.25 * std::pow(firstPressure, 1.2)));
+                qreal w = qMax(0.75, m_baseWidth * fastCanvaPressureFactor(firstPressure));
                 QPen pen(m_color, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
                 painter->setPen(pen);
                 painter->setBrush(Qt::NoBrush);
@@ -249,22 +252,50 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
                 painter->drawPolyline(poly);
             } else {
                 // Expressive pressure dynamics with subtle natural stroke tapering (Canva pen feel)
+                const int totalSegs = pts.size() - 1;
+
+                // Calculate cumulative arc length along stroke for smooth spatial tapering
+                qreal totalLength = 0.0;
+                QVector<qreal> cumDist;
+                cumDist.reserve(pts.size());
+                cumDist.append(0.0);
+                for (int i = 0; i < totalSegs; ++i) {
+                    qreal dx = pts[i + 1].pos.x() - pts[i].pos.x();
+                    qreal dy = pts[i + 1].pos.y() - pts[i].pos.y();
+                    totalLength += std::hypot(dx, dy);
+                    cumDist.append(totalLength);
+                }
+
+                // Taper spatial window (up to 10px or 25% of total stroke length)
+                const qreal taperWindow = qMin(10.0, totalLength * 0.25);
+
                 painter->setBrush(Qt::NoBrush);
                 qreal lastW = -1.0;
                 QPen segPen(m_color, m_baseWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
 
-                const int totalSegs = pts.size() - 1;
                 for (int i = 0; i < totalSegs; ++i) {
-                    qreal pAvg = qBound(0.05, (pts[i].pressure + pts[i + 1].pressure) * 0.5, 1.0);
+                    qreal pAvg = qBound(0.0, (pts[i].pressure + pts[i + 1].pressure) * 0.5, 1.0);
+
+                    // Distance from start and distance to end at segment midpoint
+                    qreal segMidDist = (cumDist[i] + cumDist[i + 1]) * 0.5;
+                    qreal distFromStart = segMidDist;
+                    qreal distFromEnd = totalLength - segMidDist;
+
                     qreal taper = 1.0;
-                    if (totalSegs >= 4) {
-                        if (i == 0) taper = 0.60;
-                        else if (i == 1) taper = 0.82;
-                        else if (i == totalSegs - 1) taper = 0.45;
-                        else if (i == totalSegs - 2) taper = 0.75;
+                    if (totalLength > 3.0 && taperWindow > 0.5) {
+                        if (distFromStart < taperWindow) {
+                            qreal u = distFromStart / taperWindow;
+                            // Smooth cubic Hermite ease-in from 0.82 to 1.00
+                            taper = 0.82 + 0.18 * (3.0 * u * u - 2.0 * u * u * u);
+                        } else if (distFromEnd < taperWindow) {
+                            qreal u = distFromEnd / taperWindow;
+                            // Smooth cubic Hermite ease-out from 1.00 to 0.78
+                            taper = 0.78 + 0.22 * (3.0 * u * u - 2.0 * u * u * u);
+                        }
                     }
-                    qreal segWidth = qMax(0.6, m_baseWidth * (0.20 + 1.25 * fastPow12(pAvg)) * taper);
-                    if (std::abs(segWidth - lastW) > 0.04) {
+
+                    qreal segWidth = qMax(0.75, m_baseWidth * fastCanvaPressureFactor(pAvg) * taper);
+                    if (std::abs(segWidth - lastW) > 0.03) {
                         segPen.setWidthF(segWidth);
                         painter->setPen(segPen);
                         lastW = segWidth;

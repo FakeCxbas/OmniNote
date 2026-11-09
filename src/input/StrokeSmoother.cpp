@@ -199,7 +199,7 @@ QVector<StrokePoint> StrokeSmoother::interpolateCatmullRom(const QVector<StrokeP
     return result;
 }
 
-QPolygonF StrokeSmoother::generateRibbonPolygon(const QVector<StrokePoint> &points, qreal baseWidth, qreal minPressureRatio) {
+QPolygonF StrokeSmoother::generateRibbonPolygon(const QVector<StrokePoint> &points, qreal baseWidth, qreal /*minPressureRatio*/) {
     if (points.isEmpty()) {
         return QPolygonF();
     }
@@ -207,7 +207,8 @@ QPolygonF StrokeSmoother::generateRibbonPolygon(const QVector<StrokePoint> &poin
     if (points.size() == 1) {
         // Draw round dot for single tap
         const auto &pt = points.first();
-        const qreal radius = (baseWidth * (minPressureRatio + (1.0 - minPressureRatio) * pt.pressure)) * 0.5;
+        const qreal p = qBound(0.0, pt.pressure, 1.0);
+        const qreal radius = qMax(0.6, (baseWidth * (0.78 + 0.44 * std::pow(p, 1.1))) * 0.5);
         QPolygonF circlePoly;
         const int steps = 16;
         for (int i = 0; i < steps; ++i) {
@@ -245,7 +246,8 @@ QPolygonF StrokeSmoother::generateRibbonPolygon(const QVector<StrokePoint> &poin
         }
 
         qreal p = qBound(0.0, points[i].pressure, 1.0);
-        halfWidths[i] = qMax(0.5, (baseWidth * (minPressureRatio + (1.0 - minPressureRatio) * p)) * 0.5);
+        qreal widthFactor = 0.78 + 0.44 * std::pow(p, 1.1);
+        halfWidths[i] = qMax(0.6, (baseWidth * widthFactor) * 0.5);
     }
 
     for (int i = 0; i < n; ++i) {
