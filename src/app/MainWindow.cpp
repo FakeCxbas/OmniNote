@@ -1295,6 +1295,10 @@ void MainWindow::updateCanvasHeaderTitle() {
 void MainWindow::onEditHeaderTitle() {
     if (!m_currentScene) return;
 
+    if (m_canvasView) {
+        m_canvasView->resetInteractionState();
+    }
+
     QString currentTitle = m_currentScene->headerTitle().trimmed();
     if (currentTitle.isEmpty()) {
         currentTitle = QStringLiteral("Tarea de Matematicas I");
@@ -1309,6 +1313,10 @@ void MainWindow::onEditHeaderTitle() {
         currentTitle,
         &ok
     );
+
+    if (m_canvasView) {
+        m_canvasView->resetInteractionState();
+    }
 
     if (ok) {
         QString clean = newTitle.trimmed();
