@@ -80,12 +80,12 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
         "   color: #ffffff;"
         "}";
 
-    // Preset 1: Fino (1.0 px)
+    // Preset 1: Fino (1.5 px)
     m_btnFino = new QPushButton("•", this);
     m_btnFino->setCheckable(true);
     m_btnFino->setStyleSheet(btnStyle);
-    m_btnFino->setToolTip("Fino (1.0 px) — Ideal para detalles y subíndices");
-    connect(m_btnFino, &QPushButton::clicked, this, [this]() { setWidth(1.0); });
+    m_btnFino->setToolTip("Fino (1.5 px) — Ideal para detalles, subíndices y fórmulas");
+    connect(m_btnFino, &QPushButton::clicked, this, [this]() { setWidth(1.5); });
     layout->addWidget(m_btnFino);
 
     // Preset 2: Normal (2.5 px)
@@ -226,7 +226,7 @@ void StrokeWidthControl::updatePresetStates(double w) {
         return std::abs(w - target) < 0.15;
     };
 
-    if (m_btnFino) m_btnFino->setChecked(match(1.0));
+    if (m_btnFino) m_btnFino->setChecked(match(1.5) || match(1.0));
     if (m_btnNormal) m_btnNormal->setChecked(match(2.5));
     if (m_btnGrueso) m_btnGrueso->setChecked(match(5.0));
     if (m_btnMarcador) m_btnMarcador->setChecked(match(10.0));
