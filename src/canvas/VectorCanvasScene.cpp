@@ -34,7 +34,6 @@ VectorCanvasScene::VectorCanvasScene(qreal width, qreal height, QObject *parent)
 void VectorCanvasScene::setPageSize(qreal width, qreal height) {
     m_pageSize = QSizeF(width, height);
     setSceneRect(0, 0, width, height);
-    m_gridCacheDirty = true;
     update();
 }
 
@@ -49,7 +48,6 @@ QPointF VectorCanvasScene::clampToPage(const QPointF &scenePos, qreal margin) co
 
 void VectorCanvasScene::setBackgroundType(BackgroundType type) {
     m_bgType = type;
-    m_gridCacheDirty = true;
     invalidate(sceneRect(), BackgroundLayer);
     update();
 }
@@ -126,7 +124,6 @@ QColor VectorCanvasScene::shadowColor() const {
 void VectorCanvasScene::setHeaderTitle(const QString &title) {
     if (m_headerTitle != title) {
         m_headerTitle = title;
-        m_gridCacheDirty = true;
         invalidate(sceneRect(), BackgroundLayer);
         update();
     }
@@ -155,7 +152,6 @@ bool VectorCanvasScene::isHeaderTitleHit(const QPointF &scenePos) const {
 void VectorCanvasScene::setPdfBackground(const QImage &img, int pageNumber) {
     m_pdfImage = img;
     m_pdfPageNumber = pageNumber;
-    m_gridCacheDirty = true;
     invalidate(sceneRect(), BackgroundLayer);
     update();
 }
@@ -163,7 +159,6 @@ void VectorCanvasScene::setPdfBackground(const QImage &img, int pageNumber) {
 void VectorCanvasScene::clearPdfBackground() {
     m_pdfImage = QImage();
     m_pdfPageNumber = -1;
-    m_gridCacheDirty = true;
     invalidate(sceneRect(), BackgroundLayer);
     update();
 }
@@ -785,23 +780,6 @@ void VectorCanvasScene::clearCanvas() {
     update();
 }
 
-void VectorCanvasScene::rebuildGridCache() {
-    if (m_pageSize.isEmpty()) return;
-    int w = qMax(100, static_cast<int>(std::ceil(m_pageSize.width())));
-    int h = qMax(100, static_cast<int>(std::ceil(m_pageSize.height())));
-
-    m_gridCache = QPixmap(w, h);
-    m_gridCache.fill(sheetColor());
-
-    QPainter painter(&m_gridCache);
-    if (!m_pdfImage.isNull()) {
-        painter.drawImage(QRectF(0, 0, w, h), m_pdfImage);
-    }
-
-    renderGridToPainter(&painter, QRectF(0, 0, w, h));
-    m_gridCacheDirty = false;
-}
-
 void VectorCanvasScene::drawBackground(QPainter *painter, const QRectF &rect) {
     // 1. Fill outer workspace desk area (outside the sheet)
     painter->fillRect(rect, deskColor());
@@ -814,16 +792,18 @@ void VectorCanvasScene::drawBackground(QPainter *painter, const QRectF &rect) {
     painter->fillRect(sheet.translated(shadowOffset, shadowOffset).intersected(rect), shadowColor());
 
     if (!visibleSheet.isEmpty()) {
-        if (m_gridCacheDirty || m_gridCache.isNull() || m_gridCache.size() != m_pageSize.toSize()) {
-            rebuildGridCache();
+        // 3. Lossless Vector Sheet Fill
+        painter->fillRect(visibleSheet, sheetColor());
+
+        if (!m_pdfImage.isNull()) {
+            painter->drawImage(sheet, m_pdfImage);
         }
 
-        // 3. Fast GPU Pixmap Blit of the cached sheet and grid
-        QRectF sourceRect = visibleSheet.translated(-sheet.topLeft());
-        painter->drawPixmap(visibleSheet.topLeft(), m_gridCache, sourceRect.toRect());
+        // 4. Pure Vector Grid & Typography (infinite resolution, SVG quality at any zoom level)
+        renderGridToPainter(painter, visibleSheet);
     }
 
-    // 4. Crisp Sheet Border so the user clearly sees the page limits
+    // 5. Crisp Sheet Border so the user clearly sees the page limits
     painter->save();
     painter->setPen(QPen(borderColor(), isLightBackground() ? 1.0 : 2.0));
     painter->setBrush(Qt::NoBrush);
@@ -842,6 +822,7 @@ void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rec
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
 
     qreal left = rect.left();
     qreal right = rect.right();
@@ -867,17 +848,25 @@ void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rec
         QPen linePen(QColor("#d9d9d9"), 0.85);
         painter->setPen(linePen);
 
-        for (int i = 0; i <= rows; ++i) {
-            qreal y = marginT + i * stepY;
-            if (y >= top - 1.0 && y <= bottom + 1.0) {
-                painter->drawLine(QPointF(marginL, y), QPointF(marginR, y));
+        qreal x1 = qMax(marginL, left - 2.0);
+        qreal x2 = qMin(marginR, right + 2.0);
+        if (x1 < x2) {
+            for (int i = 0; i <= rows; ++i) {
+                qreal y = marginT + i * stepY;
+                if (y >= top - 2.0 && y <= bottom + 2.0) {
+                    painter->drawLine(QPointF(x1, y), QPointF(x2, y));
+                }
             }
         }
 
-        for (int j = 0; j <= cols; ++j) {
-            qreal x = marginL + j * stepX;
-            if (x >= left - 1.0 && x <= right + 1.0) {
-                painter->drawLine(QPointF(x, marginT), QPointF(x, marginB));
+        qreal y1 = qMax(marginT, top - 2.0);
+        qreal y2 = qMin(marginB, bottom + 2.0);
+        if (y1 < y2) {
+            for (int j = 0; j <= cols; ++j) {
+                qreal x = marginL + j * stepX;
+                if (x >= left - 2.0 && x <= right + 2.0) {
+                    painter->drawLine(QPointF(x, y1), QPointF(x, y2));
+                }
             }
         }
 
@@ -885,27 +874,29 @@ void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rec
         painter->drawRect(QRectF(marginL, marginT, marginR - marginL, marginB - marginT));
 
         // 3. Header Title in top margin area (e.g. "Tarea de Matematicas I")
-        QString title = m_headerTitle.trimmed();
-        if (title.isEmpty()) {
-            title = QStringLiteral("Tarea de Matematicas I");
-        }
-        QFont titleFont("Inter", 16, QFont::Bold);
-        titleFont.setStyleHint(QFont::SansSerif);
-        painter->setFont(titleFont);
-        painter->setPen(QColor("#111827"));
-        painter->drawText(QPointF(marginL, 108.0), title);
+        if (top <= 140.0 && bottom >= 70.0 && right >= marginL) {
+            QString title = m_headerTitle.trimmed();
+            if (title.isEmpty()) {
+                title = QStringLiteral("Tarea de Matematicas I");
+            }
+            QFont titleFont("Inter", 16, QFont::Bold);
+            titleFont.setStyleHint(QFont::SansSerif);
+            painter->setFont(titleFont);
+            painter->setPen(QColor("#111827"));
+            painter->drawText(QPointF(marginL, 108.0), title);
 
-        // Visual edit indicator badge (subtle pencil icon)
-        QFontMetrics fm(titleFont);
-        int textW = fm.horizontalAdvance(title);
-        QRectF pencilRect(marginL + textW + 8.0, 89.0, 20.0, 20.0);
-        painter->setPen(QPen(QColor(107, 114, 128, 120), 1.0));
-        painter->setBrush(QColor(243, 244, 246, 220));
-        painter->drawRoundedRect(pencilRect, 4.0, 4.0);
-        QFont iconFont("Inter", 8, QFont::Bold);
-        painter->setFont(iconFont);
-        painter->setPen(QColor("#4b5563"));
-        painter->drawText(pencilRect, Qt::AlignCenter, "✎");
+            // Visual edit indicator badge (subtle pencil icon)
+            QFontMetrics fm(titleFont);
+            int textW = fm.horizontalAdvance(title);
+            QRectF pencilRect(marginL + textW + 8.0, 89.0, 20.0, 20.0);
+            painter->setPen(QPen(QColor(107, 114, 128, 120), 1.0));
+            painter->setBrush(QColor(243, 244, 246, 220));
+            painter->drawRoundedRect(pencilRect, 4.0, 4.0);
+            QFont iconFont("Inter", 8, QFont::Bold);
+            painter->setFont(iconFont);
+            painter->setPen(QColor("#4b5563"));
+            painter->drawText(pencilRect, Qt::AlignCenter, "✎");
+        }
 
     } else if (m_bgType == BackgroundType::CalculusGrid) {
         // Minor grid every 25px, major master lines every 125px (5x)
