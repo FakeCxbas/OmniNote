@@ -157,10 +157,23 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
 
     auto *customAct = colorMenu->addAction("Personalizado...");
     connect(customAct, &QAction::triggered, this, [this]() {
-        QColor chosen = QColorDialog::getColor(m_textColor, this, "Color del Texto");
-        if (chosen.isValid()) {
-            setTextColor(chosen);
-        }
+        auto *dlg = new QColorDialog(m_textColor, this->window());
+        dlg->setWindowTitle("Color del Texto");
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->setOption(QColorDialog::DontUseNativeDialog, true);
+        connect(dlg, &QColorDialog::currentColorChanged, this, [this](const QColor &c) {
+            if (c.isValid()) {
+                setTextColor(c);
+            }
+        });
+        connect(dlg, &QColorDialog::colorSelected, this, [this](const QColor &c) {
+            if (c.isValid()) {
+                setTextColor(c);
+            }
+        });
+        dlg->show();
+        dlg->raise();
+        dlg->activateWindow();
     });
 
     m_colorBtn->setMenu(colorMenu);

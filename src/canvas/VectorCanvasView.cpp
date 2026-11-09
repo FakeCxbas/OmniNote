@@ -13,6 +13,10 @@
 #include <QDateTime>
 #include <QtMath>
 #include <QSurfaceFormat>
+#include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 
 namespace OmniNote {
 
@@ -56,6 +60,8 @@ VectorCanvasView::VectorCanvasView(VectorCanvasScene *scene, QWidget *parent)
 
     setMouseTracking(true);
     viewport()->setMouseTracking(true);
+    setAcceptDrops(true);
+    viewport()->setAcceptDrops(true);
 
     // Floating Selection Action Bar
     m_selectionActionBar = new SelectionActionBar(viewport());
@@ -711,6 +717,71 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
         event->ignore();
         break;
     }
+}
+
+void VectorCanvasView::dragEnterEvent(QDragEnterEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (mime && (mime->hasImage() || mime->hasUrls() ||
+                 mime->hasFormat("image/png") || mime->hasFormat("image/jpeg") ||
+                 mime->hasFormat("image/webp") || mime->hasFormat("image/bmp"))) {
+        event->acceptProposedAction();
+    } else {
+        QGraphicsView::dragEnterEvent(event);
+    }
+}
+
+void VectorCanvasView::dragMoveEvent(QDragMoveEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (mime && (mime->hasImage() || mime->hasUrls() ||
+                 mime->hasFormat("image/png") || mime->hasFormat("image/jpeg") ||
+                 mime->hasFormat("image/webp") || mime->hasFormat("image/bmp"))) {
+        event->acceptProposedAction();
+    } else {
+        QGraphicsView::dragMoveEvent(event);
+    }
+}
+
+void VectorCanvasView::dropEvent(QDropEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (!mime) {
+        QGraphicsView::dropEvent(event);
+        return;
+    }
+
+    QPointF scenePos = mapToSceneF(event->position());
+    QImage img;
+
+    if (mime->hasImage()) {
+        img = qvariant_cast<QImage>(mime->imageData());
+    }
+    if (img.isNull() && mime->hasFormat("image/png")) {
+        img.loadFromData(mime->data("image/png"));
+    }
+    if (img.isNull() && mime->hasFormat("image/jpeg")) {
+        img.loadFromData(mime->data("image/jpeg"));
+    }
+    if (img.isNull() && mime->hasFormat("image/webp")) {
+        img.loadFromData(mime->data("image/webp"));
+    }
+    if (img.isNull() && mime->hasFormat("image/bmp")) {
+        img.loadFromData(mime->data("image/bmp"));
+    }
+    if (img.isNull() && mime->hasUrls()) {
+        for (const QUrl &url : mime->urls()) {
+            if (url.isLocalFile()) {
+                img.load(url.toLocalFile());
+                if (!img.isNull()) break;
+            }
+        }
+    }
+
+    if (!img.isNull()) {
+        emit imageDropped(img, scenePos);
+        event->acceptProposedAction();
+        return;
+    }
+
+    QGraphicsView::dropEvent(event);
 }
 
 void VectorCanvasView::keyPressEvent(QKeyEvent *event) {

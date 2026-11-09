@@ -150,6 +150,7 @@ void MainWindow::setupUI() {
     connect(m_canvasView, &VectorCanvasView::zoomChanged, this, &MainWindow::updateZoomDisplay);
     connect(m_canvasView, &VectorCanvasView::eraserModeChanged, this, &MainWindow::updatePointerTipDisplay);
     connect(m_canvasView, &VectorCanvasView::pasteRequested, this, &MainWindow::onPasteFromClipboard);
+    connect(m_canvasView, &VectorCanvasView::imageDropped, this, &MainWindow::insertImage);
     connect(m_currentScene, &VectorCanvasScene::contentModified, this, &MainWindow::markModified);
     connect(m_currentScene->undoStack(), &QUndoStack::indexChanged, this, &MainWindow::markModified);
     connect(m_currentScene, &VectorCanvasScene::textPlacementRequested, this, &MainWindow::onInsertTextBlockAt);
@@ -633,13 +634,29 @@ void MainWindow::onColorSelected(const QColor &color) {
 
 void MainWindow::onCustomColorDialog() {
     QColor initial = m_currentScene ? m_currentScene->currentColor() : Qt::white;
-    QColor c = QColorDialog::getColor(initial, this, "Seleccionar Color de Trazo");
-    if (c.isValid()) {
-        if (m_colorPalette) {
-            m_colorPalette->setCustomColor(c);
+    auto *dlg = new QColorDialog(initial, this);
+    dlg->setWindowTitle("Seleccionar Color de Trazo");
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setOption(QColorDialog::DontUseNativeDialog, true);
+    connect(dlg, &QColorDialog::currentColorChanged, this, [this](const QColor &c) {
+        if (c.isValid()) {
+            if (m_colorPalette) {
+                m_colorPalette->setCustomColor(c);
+            }
+            onColorSelected(c);
         }
-        onColorSelected(c);
-    }
+    });
+    connect(dlg, &QColorDialog::colorSelected, this, [this](const QColor &c) {
+        if (c.isValid()) {
+            if (m_colorPalette) {
+                m_colorPalette->setCustomColor(c);
+            }
+            onColorSelected(c);
+        }
+    });
+    dlg->show();
+    dlg->raise();
+    dlg->activateWindow();
 }
 
 void MainWindow::onInsertTextBlock() {
@@ -795,12 +812,27 @@ void MainWindow::onPasteFromClipboard() {
     const QMimeData *mimeData = clipboard->mimeData();
     if (!mimeData) return;
 
+    QImage img;
     if (mimeData->hasImage()) {
-        QImage img = qvariant_cast<QImage>(mimeData->imageData());
-        if (!img.isNull()) {
-            insertImage(img);
-            return;
-        }
+        img = qvariant_cast<QImage>(mimeData->imageData());
+    }
+    // Wayland/X11 clipboard direct MIME format fallbacks
+    if (img.isNull() && mimeData->hasFormat("image/png")) {
+        img.loadFromData(mimeData->data("image/png"));
+    }
+    if (img.isNull() && mimeData->hasFormat("image/jpeg")) {
+        img.loadFromData(mimeData->data("image/jpeg"));
+    }
+    if (img.isNull() && mimeData->hasFormat("image/webp")) {
+        img.loadFromData(mimeData->data("image/webp"));
+    }
+    if (img.isNull() && mimeData->hasFormat("image/bmp")) {
+        img.loadFromData(mimeData->data("image/bmp"));
+    }
+
+    if (!img.isNull()) {
+        insertImage(img);
+        return;
     }
 
     if (mimeData->hasUrls()) {

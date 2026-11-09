@@ -43,11 +43,17 @@ public:
     QString serialize() const;
     void deserialize(const QString &data);
 
+    bool isBackgroundRemoved() const { return m_backgroundRemoved; }
+    void toggleBackgroundRemoval();
+    void setBackgroundRemoved(bool removed);
+    static QImage processRemoveBackground(const QImage &source, qreal tolerance = 0.15, qreal feather = 0.08);
+
     bool isControlHit(const QPointF &localPos) const {
-        return closeButtonRect().contains(localPos) || (hitTestHandle(localPos) != NoHandle);
+        return closeButtonRect().contains(localPos) || magicButtonRect().contains(localPos) || (hitTestHandle(localPos) != NoHandle);
     }
     ResizeHandle hitTestHandle(const QPointF &pos) const;
     QRectF closeButtonRect() const;
+    QRectF magicButtonRect() const;
 
 signals:
     void blockModified();
@@ -64,9 +70,11 @@ protected:
 private:
     void updatePixmap();
 
+    QImage m_originalImage;
     QImage m_image;
     QPixmap m_cachedPixmap;
     QRectF m_rect{0, 0, 300, 200};
+    bool m_backgroundRemoved{false};
 
     bool m_isHovered{false};
     bool m_isDragging{false};
