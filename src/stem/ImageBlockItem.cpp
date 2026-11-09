@@ -1,5 +1,6 @@
 #include "ImageBlockItem.hpp"
 #include "../app/AppIcons.hpp"
+#include <QGraphicsScene>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsSceneHoverEvent>
 #include <QCursor>
@@ -175,12 +176,59 @@ QRectF ImageBlockItem::boundingRect() const {
 }
 
 QRectF ImageBlockItem::closeButtonRect() const {
-    return QRectF(m_rect.right() - 24.0, m_rect.top() + 4.0, 20.0, 20.0);
+    return QRectF(m_rect.right() - 25.0, m_rect.top() + 5.0, 20.0, 20.0);
 }
 
 QRectF ImageBlockItem::magicButtonRect() const {
     const qreal btnW = m_backgroundRemoved ? 94.0 : 106.0;
-    return QRectF(m_rect.left() + 6.0, m_rect.top() + 6.0, btnW, 22.0);
+    return QRectF(m_rect.left() + 6.0, m_rect.top() + 5.0, btnW, 22.0);
+}
+
+QRectF ImageBlockItem::headerRect() const {
+    return QRectF(m_rect.left(), m_rect.top(), m_rect.width(), 32.0);
+}
+
+QRectF ImageBlockItem::dragHandleRect() const {
+    const qreal handleW = 76.0;
+    const qreal handleH = 22.0;
+    qreal left = m_rect.left() + (m_rect.width() - handleW) * 0.5;
+    qreal minLeft = magicButtonRect().right() + 6.0;
+    qreal maxRight = closeButtonRect().left() - 6.0;
+    left = qMax(minLeft, left);
+    qreal w = handleW;
+    if (left + w > maxRight) {
+        w = qMax(28.0, maxRight - left);
+    }
+    return QRectF(left, m_rect.top() + 5.0, w, handleH);
+}
+
+bool ImageBlockItem::isBorderHit(const QPointF &localPos, qreal tolerance) const {
+    if (!m_rect.adjusted(-tolerance, -tolerance, tolerance, tolerance).contains(localPos)) {
+        return false;
+    }
+    if (m_rect.adjusted(tolerance, tolerance, -tolerance, -tolerance).contains(localPos)) {
+        return false;
+    }
+    return true;
+}
+
+bool ImageBlockItem::isControlHit(const QPointF &localPos) const {
+    if (magicButtonRect().contains(localPos) || closeButtonRect().contains(localPos)) {
+        return true;
+    }
+    if (headerRect().contains(localPos)) {
+        return true;
+    }
+    if (hitTestHandle(localPos) != NoHandle) {
+        return true;
+    }
+    if (isSelected() && m_rect.contains(localPos)) {
+        return true;
+    }
+    if (isBorderHit(localPos, 10.0)) {
+        return true;
+    }
+    return false;
 }
 
 ImageBlockItem::ResizeHandle ImageBlockItem::hitTestHandle(const QPointF &pos) const {
@@ -223,10 +271,10 @@ void ImageBlockItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
     }
     painter->restore();
 
-    // 3. Subtle Outer Border
-    QColor borderColor = showControls ? QColor("#7aa2f7") : QColor(47, 53, 73, 160);
-    qreal borderWidth = showControls ? 1.8 : 1.0;
-    painter->setPen(QPen(borderColor, borderWidth));
+    // 3. Subtle Outer Border (Tokyo Night Blue / Cyan)
+    QColor borderColor = isSelected() ? QColor("#7aa2f7") : (showControls ? QColor("#7dcfff") : QColor(47, 53, 73, 160));
+    qreal borderWidth = isSelected() ? 2.0 : (showControls ? 1.5 : 1.0);
+    painter->setPen(QPen(borderColor, borderWidth, isSelected() ? Qt::DashLine : Qt::SolidLine));
     painter->setBrush(Qt::NoBrush);
     painter->drawRoundedRect(m_rect, 8.0, 8.0);
 
@@ -245,10 +293,17 @@ void ImageBlockItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
         drawHandle(m_rect.bottomRight(), m_hoverResizeHandle == BottomRight);
         drawHandle(m_rect.bottomLeft(), m_hoverResizeHandle == BottomLeft);
 
-        // 5. Magic Background Remover Pill ("✦ Quitar Fondo" / "↺ Con Fondo")
+        // 5. Header Bar & Controls
+        painter->save();
+        QRectF hr = headerRect();
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(15, 17, 26, 200));
+        painter->drawRoundedRect(hr.adjusted(2, 2, -2, 0), 6.0, 6.0);
+
+        // 5a. Magic Background Remover Pill ("✦ Quitar Fondo" / "↺ Con Fondo")
         QRectF mb = magicButtonRect();
         painter->setPen(QPen(m_backgroundRemoved ? QColor("#7dcfff") : QColor("#7aa2f7"), 1.2));
-        painter->setBrush(QColor(22, 24, 34, 235));
+        painter->setBrush(QColor(22, 24, 34, 240));
         painter->drawRoundedRect(mb, 5.0, 5.0);
 
         QFont btnFont("Inter", 8, QFont::DemiBold);
@@ -258,16 +313,42 @@ void ImageBlockItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
         QString btnText = m_backgroundRemoved ? "↺ Con Fondo" : "✦ Quitar Fondo";
         painter->drawText(mb, Qt::AlignCenter, btnText);
 
-        // 6. Close Button (✕)
+        // 5b. Prominent Move Handle Grip Pill ("⠿ Mover")
+        QRectF dh = dragHandleRect();
+        if (dh.width() >= 28.0) {
+            painter->setPen(QPen(m_isHoverDragHandle ? QColor("#7aa2f7") : QColor("#3b4261"), 1.0));
+            painter->setBrush(m_isHoverDragHandle ? QColor(41, 46, 66, 245) : QColor(24, 27, 38, 235));
+            painter->drawRoundedRect(dh, 5.0, 5.0);
+
+            // Draw 6-dot grip (2 columns of 3 dots)
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(m_isHoverDragHandle ? QColor("#7dcfff") : QColor("#7aa2f7"));
+            qreal dotX1 = dh.left() + (dh.width() >= 60.0 ? 10.0 : dh.width() * 0.5 - 3.0);
+            qreal dotX2 = dotX1 + 5.0;
+            qreal dotYMid = dh.center().y();
+            for (int dy : {-4, 0, 4}) {
+                painter->drawEllipse(QPointF(dotX1, dotYMid + dy), 1.4, 1.4);
+                painter->drawEllipse(QPointF(dotX2, dotYMid + dy), 1.4, 1.4);
+            }
+
+            if (dh.width() >= 55.0) {
+                painter->setFont(btnFont);
+                painter->setPen(m_isHoverDragHandle ? QColor("#ffffff") : QColor("#c0caf5"));
+                QRectF textR(dotX2 + 5.0, dh.top(), dh.right() - (dotX2 + 5.0) - 2.0, dh.height());
+                painter->drawText(textR, Qt::AlignVCenter | Qt::AlignLeft, "Mover");
+            }
+        }
+
+        // 5c. Close Button (✕)
         QRectF cb = closeButtonRect();
-        bool cbHover = cb.contains(m_dragStartMousePos); // or hover pos
         painter->setPen(Qt::NoPen);
-        painter->setBrush(cbHover ? QColor(247, 118, 142, 220) : QColor(20, 22, 30, 180));
+        painter->setBrush(m_isHoverClose ? QColor(247, 118, 142, 230) : QColor(26, 29, 42, 210));
         painter->drawEllipse(cb);
 
         painter->setPen(QPen(QColor("#ffffff"), 1.6, Qt::SolidLine, Qt::RoundCap));
         painter->drawLine(cb.center() + QPointF(-3.5, -3.5), cb.center() + QPointF(3.5, 3.5));
         painter->drawLine(cb.center() + QPointF(-3.5, 3.5), cb.center() + QPointF(3.5, -3.5));
+        painter->restore();
     }
 }
 
@@ -279,6 +360,8 @@ void ImageBlockItem::hoverEnterEvent(QGraphicsSceneHoverEvent *) {
 void ImageBlockItem::hoverLeaveEvent(QGraphicsSceneHoverEvent *) {
     m_isHovered = false;
     m_hoverResizeHandle = NoHandle;
+    m_isHoverDragHandle = false;
+    m_isHoverClose = false;
     setCursor(Qt::ArrowCursor);
     update();
 }
@@ -287,6 +370,8 @@ void ImageBlockItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
     QPointF pos = event->pos();
     ResizeHandle h = hitTestHandle(pos);
     m_hoverResizeHandle = h;
+    m_isHoverDragHandle = dragHandleRect().contains(pos);
+    m_isHoverClose = closeButtonRect().contains(pos);
 
     if (h == TopLeft || h == BottomRight) {
         setCursor(Qt::SizeFDiagCursor);
@@ -304,21 +389,21 @@ void ImageBlockItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         QPointF pos = event->pos();
 
-        // Check magic background button
+        // 1. Magic background button
         if (magicButtonRect().contains(pos)) {
             toggleBackgroundRemoval();
             event->accept();
             return;
         }
 
-        // Check close button
+        // 2. Close button
         if (closeButtonRect().contains(pos)) {
             emit itemDeleted(this);
             event->accept();
             return;
         }
 
-        // Check resize handles
+        // 3. Resize handles
         ResizeHandle h = hitTestHandle(pos);
         if (h != NoHandle) {
             m_activeResizeHandle = h;
@@ -328,7 +413,11 @@ void ImageBlockItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
             return;
         }
 
-        // Drag move
+        // 4. Drag Move (Header, Drag Handle, Border, or Body)
+        if (scene()) {
+            scene()->clearSelection();
+        }
+        setSelected(true);
         m_isDragging = true;
         m_dragStartMousePos = event->scenePos();
         m_dragStartItemPos = this->pos();

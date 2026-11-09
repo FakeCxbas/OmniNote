@@ -95,6 +95,9 @@ bool FormulaBlockItem::isControlHit(const QPointF &localPos) const {
     if (localPos.y() <= 30.0 && localPos.x() >= m_rect.left() && localPos.x() <= m_rect.right()) {
         return true;
     }
+    if (isSelected() && m_rect.contains(localPos)) {
+        return true;
+    }
     return false;
 }
 

@@ -784,6 +784,8 @@ void MainWindow::insertImage(const QImage &img, const QPointF &pos) {
     });
 
     m_currentScene->addItem(imageItem);
+    m_currentScene->clearSelection();
+    imageItem->setSelected(true);
     m_currentScene->undoStack()->push(new AddStemBlockCommand(m_currentScene, imageItem));
     markModified();
 
