@@ -132,6 +132,26 @@ void VectorCanvasScene::setHeaderTitle(const QString &title) {
     }
 }
 
+QRectF VectorCanvasScene::headerTitleRect() const {
+    if (m_bgType != BackgroundType::CanvaGrid) {
+        return QRectF();
+    }
+    const qreal marginL = 80.0;
+    QString title = m_headerTitle.trimmed();
+    if (title.isEmpty()) {
+        title = QStringLiteral("Tarea de Matematicas I");
+    }
+    QFont titleFont("Inter", 16, QFont::Bold);
+    titleFont.setStyleHint(QFont::SansSerif);
+    QFontMetrics fm(titleFont);
+    int textW = fm.horizontalAdvance(title);
+    return QRectF(marginL - 8.0, 78.0, textW + 48.0, 38.0);
+}
+
+bool VectorCanvasScene::isHeaderTitleHit(const QPointF &scenePos) const {
+    return headerTitleRect().contains(scenePos);
+}
+
 void VectorCanvasScene::setPdfBackground(const QImage &img, int pageNumber) {
     m_pdfImage = img;
     m_pdfPageNumber = pageNumber;
@@ -180,6 +200,11 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
 
     const QPointF clampedPos = clampToPage(scenePos, qMax(2.0, m_currentBaseWidth * 0.5));
     ToolType activeTool = isEraser ? ToolType::Eraser : m_currentTool;
+
+    if (isHeaderTitleHit(clampedPos) && activeTool != ToolType::Eraser) {
+        emit headerTitleEditRequested();
+        return;
+    }
 
     if (activeTool == ToolType::Eraser) {
         m_isErasing = true;
@@ -869,6 +894,18 @@ void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rec
         painter->setFont(titleFont);
         painter->setPen(QColor("#111827"));
         painter->drawText(QPointF(marginL, 108.0), title);
+
+        // Visual edit indicator badge (subtle pencil icon)
+        QFontMetrics fm(titleFont);
+        int textW = fm.horizontalAdvance(title);
+        QRectF pencilRect(marginL + textW + 8.0, 89.0, 20.0, 20.0);
+        painter->setPen(QPen(QColor(107, 114, 128, 120), 1.0));
+        painter->setBrush(QColor(243, 244, 246, 220));
+        painter->drawRoundedRect(pencilRect, 4.0, 4.0);
+        QFont iconFont("Inter", 8, QFont::Bold);
+        painter->setFont(iconFont);
+        painter->setPen(QColor("#4b5563"));
+        painter->drawText(pencilRect, Qt::AlignCenter, "✎");
 
     } else if (m_bgType == BackgroundType::CalculusGrid) {
         // Minor grid every 25px, major master lines every 125px (5x)

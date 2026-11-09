@@ -46,6 +46,8 @@ public:
 
     QString headerTitle() const { return m_headerTitle; }
     void setHeaderTitle(const QString &title);
+    bool isHeaderTitleHit(const QPointF &scenePos) const;
+    QRectF headerTitleRect() const;
 
     void setPdfBackground(const QImage &img, int pageNumber = 0);
     void clearPdfBackground();
@@ -103,6 +105,7 @@ signals:
     void colorChanged(const QColor &color);
     void widthChanged(qreal width);
     void textPlacementRequested(const QPointF &scenePos);
+    void headerTitleEditRequested();
 
 protected:
     void drawBackground(QPainter *painter, const QRectF &rect) override;

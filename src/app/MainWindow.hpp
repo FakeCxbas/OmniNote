@@ -77,6 +77,7 @@ private slots:
 
     void toggleSidebar();
     void onInsertTextBlockAt(const QPointF &pos);
+    void onEditHeaderTitle();
     void showCloudSyncDialog();
     void showShortcutsGuide();
 
@@ -165,6 +166,7 @@ private:
 
     QComboBox *m_shapeCombo{nullptr};
     QComboBox *m_gridCombo{nullptr};
+    QAction *m_editHeaderTitleAction{nullptr};
     StrokeWidthControl *m_widthControl{nullptr};
     ColorPaletteControl *m_colorPalette{nullptr};
 

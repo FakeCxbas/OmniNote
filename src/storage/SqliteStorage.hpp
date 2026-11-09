@@ -32,6 +32,7 @@ struct PageRecord {
     int backgroundType{0};
     int pdfPage{-1};
     QString pdfPath;
+    QString title;
 };
 
 struct StrokeRecord {
@@ -80,12 +81,15 @@ public:
     qint64 addNotebook(qint64 subjectId, const QString &title);
     bool deleteNotebook(qint64 notebookId);
     QString getNotebookTitle(qint64 notebookId);
+    bool updateNotebookTitle(qint64 notebookId, const QString &title);
 
     // Pages
     QVector<PageRecord> getPages(qint64 notebookId);
     qint64 addPage(qint64 notebookId, int pageNumber, qreal width = 1240.0, qreal height = 1754.0,
-                   int bgType = 5, int pdfPage = -1, const QString &pdfPath = "");
+                   int bgType = 5, int pdfPage = -1, const QString &pdfPath = "", const QString &title = "");
     bool updatePageBackground(qint64 pageId, int bgType);
+    bool updatePageTitle(qint64 pageId, const QString &title);
+    QString getPageTitle(qint64 pageId);
     bool deletePage(qint64 pageId);
     int getPageNumber(qint64 pageId);
 

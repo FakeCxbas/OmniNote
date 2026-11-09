@@ -2,6 +2,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QDebug>
+#include <QDateTime>
 
 namespace OmniNote {
 
@@ -122,6 +123,9 @@ bool SqliteStorage::createTables() {
         }
         return false;
     }
+
+    // Schema migration: ensure Pages table contains custom title column
+    sqlite3_exec(m_db, "ALTER TABLE Pages ADD COLUMN title TEXT;", nullptr, nullptr, nullptr);
 
     return true;
 }
@@ -264,11 +268,27 @@ QString SqliteStorage::getNotebookTitle(qint64 notebookId) {
     return title;
 }
 
+bool SqliteStorage::updateNotebookTitle(qint64 notebookId, const QString &title) {
+    if (!m_db || notebookId <= 0) return false;
+    const char *sql = "UPDATE Notebooks SET title = ?, updated_at = ? WHERE id = ?;";
+    sqlite3_stmt *stmt = nullptr;
+    bool ok = false;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        QByteArray titleBytes = title.toUtf8();
+        sqlite3_bind_text(stmt, 1, titleBytes.constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 2, QDateTime::currentMSecsSinceEpoch());
+        sqlite3_bind_int64(stmt, 3, notebookId);
+        ok = (sqlite3_step(stmt) == SQLITE_DONE);
+        sqlite3_finalize(stmt);
+    }
+    return ok;
+}
+
 QVector<PageRecord> SqliteStorage::getPages(qint64 notebookId) {
     QVector<PageRecord> result;
     if (!m_db) return result;
 
-    const char *sql = "SELECT id, notebook_id, page_number, width, height, background_type, pdf_page, pdf_path FROM Pages WHERE notebook_id = ? ORDER BY page_number ASC;";
+    const char *sql = "SELECT id, notebook_id, page_number, width, height, background_type, pdf_page, pdf_path, title FROM Pages WHERE notebook_id = ? ORDER BY page_number ASC;";
     sqlite3_stmt *stmt = nullptr;
 
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
@@ -284,6 +304,8 @@ QVector<PageRecord> SqliteStorage::getPages(qint64 notebookId) {
             p.pdfPage = sqlite3_column_int(stmt, 6);
             const char *pdfPathStr = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7));
             p.pdfPath = pdfPathStr ? QString::fromUtf8(pdfPathStr) : QString();
+            const char *titleStr = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 8));
+            p.title = titleStr ? QString::fromUtf8(titleStr) : QString();
             result.append(p);
         }
         sqlite3_finalize(stmt);
@@ -292,15 +314,16 @@ QVector<PageRecord> SqliteStorage::getPages(qint64 notebookId) {
 }
 
 qint64 SqliteStorage::addPage(qint64 notebookId, int pageNumber, qreal width, qreal height,
-                              int bgType, int pdfPage, const QString &pdfPath) {
+                              int bgType, int pdfPage, const QString &pdfPath, const QString &title) {
     if (!m_db) return -1;
 
-    const char *sql = "INSERT INTO Pages (notebook_id, page_number, width, height, background_type, pdf_page, pdf_path) VALUES (?, ?, ?, ?, ?, ?, ?);";
+    const char *sql = "INSERT INTO Pages (notebook_id, page_number, width, height, background_type, pdf_page, pdf_path, title) VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
     sqlite3_stmt *stmt = nullptr;
     qint64 newId = -1;
 
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         QByteArray pathBytes = pdfPath.toUtf8();
+        QByteArray titleBytes = title.toUtf8();
         sqlite3_bind_int64(stmt, 1, notebookId);
         sqlite3_bind_int(stmt, 2, pageNumber);
         sqlite3_bind_double(stmt, 3, width);
@@ -308,6 +331,7 @@ qint64 SqliteStorage::addPage(qint64 notebookId, int pageNumber, qreal width, qr
         sqlite3_bind_int(stmt, 5, bgType);
         sqlite3_bind_int(stmt, 6, pdfPage);
         sqlite3_bind_text(stmt, 7, pathBytes.constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 8, titleBytes.constData(), -1, SQLITE_TRANSIENT);
 
         if (sqlite3_step(stmt) == SQLITE_DONE) {
             newId = sqlite3_last_insert_rowid(m_db);
@@ -330,6 +354,39 @@ bool SqliteStorage::updatePageBackground(qint64 pageId, int bgType) {
         sqlite3_finalize(stmt);
     }
     return ok;
+}
+
+bool SqliteStorage::updatePageTitle(qint64 pageId, const QString &title) {
+    if (!m_db || pageId <= 0) return false;
+    const char *sql = "UPDATE Pages SET title = ? WHERE id = ?;";
+    sqlite3_stmt *stmt = nullptr;
+    bool ok = false;
+
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        QByteArray titleBytes = title.toUtf8();
+        sqlite3_bind_text(stmt, 1, titleBytes.constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 2, pageId);
+        ok = (sqlite3_step(stmt) == SQLITE_DONE);
+        sqlite3_finalize(stmt);
+    }
+    return ok;
+}
+
+QString SqliteStorage::getPageTitle(qint64 pageId) {
+    if (!m_db || pageId <= 0) return QString();
+    const char *sql = "SELECT title FROM Pages WHERE id = ?;";
+    sqlite3_stmt *stmt = nullptr;
+    QString title;
+
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int64(stmt, 1, pageId);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char *t = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+            if (t) title = QString::fromUtf8(t);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return title;
 }
 
 bool SqliteStorage::deletePage(qint64 pageId) {

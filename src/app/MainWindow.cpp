@@ -153,6 +153,7 @@ void MainWindow::setupUI() {
     connect(m_currentScene, &VectorCanvasScene::contentModified, this, &MainWindow::markModified);
     connect(m_currentScene->undoStack(), &QUndoStack::indexChanged, this, &MainWindow::markModified);
     connect(m_currentScene, &VectorCanvasScene::textPlacementRequested, this, &MainWindow::onInsertTextBlockAt);
+    connect(m_currentScene, &VectorCanvasScene::headerTitleEditRequested, this, &MainWindow::onEditHeaderTitle);
 }
 
 void MainWindow::setupSidebar() {
@@ -410,6 +411,11 @@ void MainWindow::setupToolbars() {
     m_gridCombo->setCurrentIndex(0);
     connect(m_gridCombo, &QComboBox::currentIndexChanged, this, &MainWindow::onGridTypeChanged);
     styleBar->addWidget(m_gridCombo);
+
+    m_editHeaderTitleAction = styleBar->addAction(AppIcons::get(AppIcons::IconType::Text, QColor("#7dcfff"), 20), "Título");
+    m_editHeaderTitleAction->setToolTip("Editar título de la hoja (o haz doble clic sobre el título en la hoja) [F2]");
+    m_editHeaderTitleAction->setShortcut(QKeySequence(Qt::Key_F2));
+    connect(m_editHeaderTitleAction, &QAction::triggered, this, &MainWindow::onEditHeaderTitle);
 
     styleBar->addSeparator();
 
@@ -1030,8 +1036,10 @@ void MainWindow::onSubjectTreeItemClicked(QTreeWidgetItem *item, int /*column*/)
         QSignalBlocker blocker(m_pageList);
         m_pageList->clear();
         for (const auto &p : pages) {
-            auto *pItem = new QListWidgetItem(AppIcons::get(AppIcons::IconType::Page, QColor("#7dcfff"), 16), QString("Página %1").arg(p.pageNumber), m_pageList);
+            QString label = p.title.trimmed().isEmpty() ? QString("Página %1").arg(p.pageNumber) : QString("Pág %1 • %2").arg(p.pageNumber).arg(p.title.trimmed());
+            auto *pItem = new QListWidgetItem(AppIcons::get(AppIcons::IconType::Page, QColor("#7dcfff"), 16), label, m_pageList);
             pItem->setData(Qt::UserRole, p.id);
+            if (!p.title.trimmed().isEmpty()) pItem->setToolTip(p.title.trimmed());
         }
 
         if (!pages.isEmpty()) {
@@ -1249,33 +1257,75 @@ void MainWindow::updateCanvasHeaderTitle() {
     if (!m_currentScene) return;
 
     QString headerTitle;
-    QString subjName;
-    for (const auto &s : m_storage.getSubjects()) {
-        if (s.id == m_currentSubjectId) {
-            subjName = s.name.trimmed();
-            break;
-        }
+    if (m_currentPageId > 0) {
+        headerTitle = m_storage.getPageTitle(m_currentPageId).trimmed();
     }
 
-    QString nbTitle = m_storage.getNotebookTitle(m_currentNotebookId).trimmed();
+    if (headerTitle.isEmpty()) {
+        QString subjName;
+        for (const auto &s : m_storage.getSubjects()) {
+            if (s.id == m_currentSubjectId) {
+                subjName = s.name.trimmed();
+                break;
+            }
+        }
 
-    if (!subjName.isEmpty()) {
-        if (subjName.startsWith("Tarea", Qt::CaseInsensitive)) {
-            headerTitle = subjName;
+        QString nbTitle = m_storage.getNotebookTitle(m_currentNotebookId).trimmed();
+
+        if (!subjName.isEmpty()) {
+            if (subjName.startsWith("Tarea", Qt::CaseInsensitive)) {
+                headerTitle = subjName;
+            } else {
+                headerTitle = QStringLiteral("Tarea de %1").arg(subjName);
+            }
+        } else if (!nbTitle.isEmpty()) {
+            if (nbTitle.startsWith("Tarea", Qt::CaseInsensitive)) {
+                headerTitle = nbTitle;
+            } else {
+                headerTitle = QStringLiteral("Tarea de %1").arg(nbTitle);
+            }
         } else {
-            headerTitle = QStringLiteral("Tarea de %1").arg(subjName);
+            headerTitle = QStringLiteral("Tarea de Matematicas I");
         }
-    } else if (!nbTitle.isEmpty()) {
-        if (nbTitle.startsWith("Tarea", Qt::CaseInsensitive)) {
-            headerTitle = nbTitle;
-        } else {
-            headerTitle = QStringLiteral("Tarea de %1").arg(nbTitle);
-        }
-    } else {
-        headerTitle = QStringLiteral("Tarea de Matematicas I");
     }
 
     m_currentScene->setHeaderTitle(headerTitle);
+}
+
+void MainWindow::onEditHeaderTitle() {
+    if (!m_currentScene) return;
+
+    QString currentTitle = m_currentScene->headerTitle().trimmed();
+    if (currentTitle.isEmpty()) {
+        currentTitle = QStringLiteral("Tarea de Matematicas I");
+    }
+
+    bool ok = false;
+    QString newTitle = QInputDialog::getText(
+        this,
+        "Editar Nombre de la Hoja",
+        "Ingresa el título o nombre para esta hoja:",
+        QLineEdit::Normal,
+        currentTitle,
+        &ok
+    );
+
+    if (ok) {
+        QString clean = newTitle.trimmed();
+        if (clean.isEmpty()) {
+            clean = QStringLiteral("Tarea de Matematicas I");
+        }
+        m_currentScene->setHeaderTitle(clean);
+        if (m_currentPageId > 0) {
+            m_storage.updatePageTitle(m_currentPageId, clean);
+            if (m_pageList && m_pageList->currentItem()) {
+                int pageNum = m_storage.getPageNumber(m_currentPageId);
+                m_pageList->currentItem()->setText(QString("Pág %1 • %2").arg(pageNum).arg(clean));
+                m_pageList->currentItem()->setToolTip(clean);
+            }
+        }
+        markModified();
+    }
 }
 
 void MainWindow::onSaveCurrentPage() {
@@ -1550,6 +1600,9 @@ void MainWindow::syncToLocalCloudFolder(bool notifyUser) {
 std::unique_ptr<VectorCanvasScene> MainWindow::createSceneForPage(const PageRecord &p) {
     auto scene = std::make_unique<VectorCanvasScene>(p.width, p.height);
     scene->setBackgroundType(static_cast<BackgroundType>(p.backgroundType));
+    if (!p.title.trimmed().isEmpty()) {
+        scene->setHeaderTitle(p.title.trimmed());
+    }
 
     if (p.pdfPage >= 0 && !p.pdfPath.isEmpty()) {
         if (m_pdfManager.filePath() != p.pdfPath) {

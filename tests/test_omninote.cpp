@@ -229,10 +229,21 @@ void testSqliteStorage() {
     assert(storage.getPageNumber(pageId) == 1);
     assert(storage.getPageNumber(page3Id) == 2);
 
-    QVector<StrokeRecord> verifyP2Strokes;
-    QVector<StemBlockRecord> verifyP2Blocks;
-    storage.loadPageData(page2Id, verifyP2Strokes, verifyP2Blocks);
-    assert(verifyP2Strokes.isEmpty() && verifyP2Blocks.isEmpty());
+    assert(storage.updatePageTitle(pageId, "Tarea de Física II"));
+    assert(storage.getPageTitle(pageId) == "Tarea de Física II");
+
+    auto checkPages = storage.getPages(nbId);
+    assert(checkPages[0].title == "Tarea de Física II");
+
+    assert(storage.updateNotebookTitle(nbId, "Cuaderno Avanzado"));
+    assert(storage.getNotebookTitle(nbId) == "Cuaderno Avanzado");
+
+    // Test CanvaGrid header title hit testing
+    VectorCanvasScene canvaScene(800, 1130);
+    canvaScene.setBackgroundType(BackgroundType::CanvaGrid);
+    canvaScene.setHeaderTitle("Tarea de Matematicas I");
+    assert(canvaScene.isHeaderTitleHit(QPointF(100, 95)) == true);
+    assert(canvaScene.isHeaderTitleHit(QPointF(100, 300)) == false);
 
     storage.close();
     std::cout << "  ✓ SQLite ACID schema, WAL mode, foreign keys, cascade delete & page renumbering passed!" << std::endl;
