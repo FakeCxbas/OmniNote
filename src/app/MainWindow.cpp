@@ -555,14 +555,30 @@ void MainWindow::onGridTypeChanged(int index) {
 
     if (wasLight != isNowLight) {
         if (isNowLight) {
-            // Switched to Light background: if ink was white or near-white, adapt to Canva Navy (#002b80)
+            // Switched to Light background: adapt existing strokes to Canva Navy (#002b80)
+            for (auto *item : m_currentScene->items()) {
+                if (item->type() == StrokeItem::Type) {
+                    auto *s = static_cast<StrokeItem *>(item);
+                    if (s->color() == QColor("#ffffff") || s->color() == QColor("#c0caf5")) {
+                        s->setColor(QColor("#002b80"));
+                    }
+                }
+            }
             if (m_currentScene->currentColor() == QColor("#ffffff") || m_currentScene->currentColor() == QColor("#c0caf5")) {
                 m_currentScene->setCurrentColor(QColor("#002b80"));
                 if (m_colorPalette) m_colorPalette->setCurrentColor(QColor("#002b80"));
                 if (m_widthControl) m_widthControl->setColor(QColor("#002b80"));
             }
         } else {
-            // Switched to Dark background: if ink was dark (#002b80 or #111827), adapt to White (#ffffff)
+            // Switched to Dark background: adapt existing strokes to White (#ffffff)
+            for (auto *item : m_currentScene->items()) {
+                if (item->type() == StrokeItem::Type) {
+                    auto *s = static_cast<StrokeItem *>(item);
+                    if (s->color() == QColor("#002b80") || s->color() == QColor("#111827")) {
+                        s->setColor(QColor("#ffffff"));
+                    }
+                }
+            }
             if (m_currentScene->currentColor() == QColor("#002b80") || m_currentScene->currentColor() == QColor("#111827")) {
                 m_currentScene->setCurrentColor(QColor("#ffffff"));
                 if (m_colorPalette) m_colorPalette->setCurrentColor(QColor("#ffffff"));
@@ -1075,8 +1091,22 @@ void MainWindow::switchPage(qint64 pageId) {
                 int idx = m_gridCombo->findData(p.backgroundType);
                 if (idx >= 0) m_gridCombo->setCurrentIndex(idx);
 
+                bool isLight = m_currentScene->isLightBackground();
                 if (m_colorPalette) {
-                    m_colorPalette->setLightMode(m_currentScene->isLightBackground());
+                    m_colorPalette->setLightMode(isLight);
+                }
+                if (isLight) {
+                    if (m_currentScene->currentColor() == QColor("#ffffff") || m_currentScene->currentColor() == QColor("#c0caf5")) {
+                        m_currentScene->setCurrentColor(QColor("#002b80"));
+                        if (m_colorPalette) m_colorPalette->setCurrentColor(QColor("#002b80"));
+                        if (m_widthControl) m_widthControl->setColor(QColor("#002b80"));
+                    }
+                } else {
+                    if (m_currentScene->currentColor() == QColor("#002b80") || m_currentScene->currentColor() == QColor("#111827")) {
+                        m_currentScene->setCurrentColor(QColor("#ffffff"));
+                        if (m_colorPalette) m_colorPalette->setCurrentColor(QColor("#ffffff"));
+                        if (m_widthControl) m_widthControl->setColor(QColor("#ffffff"));
+                    }
                 }
 
                 if (p.pdfPage >= 0 && !p.pdfPath.isEmpty()) {
@@ -1198,7 +1228,7 @@ void MainWindow::ensureActivePageForSave() {
 
     auto pages = m_storage.getPages(m_currentNotebookId);
     if (pages.isEmpty()) {
-        int bgType = static_cast<int>(m_currentScene ? m_currentScene->backgroundType() : BackgroundType::CanvaGrid);
+        int bgType = static_cast<int>(BackgroundType::CanvaGrid);
         m_currentPageId = m_storage.addPage(m_currentNotebookId, 1, 1240.0, 1754.0, bgType);
         QSignalBlocker blocker(m_pageList);
         m_pageList->clear();
@@ -1683,7 +1713,7 @@ void MainWindow::onAddPage() {
     }
 
     int newNum = m_pageList->count() + 1;
-    int bgType = static_cast<int>(m_currentScene ? m_currentScene->backgroundType() : BackgroundType::CanvaGrid);
+    int bgType = static_cast<int>(BackgroundType::CanvaGrid);
     qint64 newPageId = m_storage.addPage(m_currentNotebookId, newNum, 1240.0, 1754.0, bgType);
     if (newPageId > 0) {
         QSignalBlocker blocker(m_pageList);
