@@ -1104,14 +1104,16 @@ void testCanvaTemplateAndMultiThemePalettes() {
     scene.setBackgroundType(BackgroundType::CanvaGrid);
     assert(scene.isLightBackground() == true);
     assert(scene.sheetColor() == QColor("#ffffff"));
-    assert(scene.deskColor() == QColor("#ebedf2"));
+    assert(scene.deskColor() == QColor("#14161f"));
     assert(scene.borderColor() == QColor("#d0d7de"));
+    scene.setHeaderTitle("Tarea de Matematicas I");
+    assert(scene.headerTitle() == "Tarea de Matematicas I");
 
     // 2. Warm Sepia verification
     scene.setBackgroundType(BackgroundType::WarmSepia);
     assert(scene.isLightBackground() == true);
     assert(scene.sheetColor() == QColor("#fbf8f1"));
-    assert(scene.deskColor() == QColor("#ebe4d8"));
+    assert(scene.deskColor() == QColor("#14161f"));
 
     // 3. Chalkboard Green verification
     scene.setBackgroundType(BackgroundType::ChalkboardGreen);

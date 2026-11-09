@@ -83,9 +83,8 @@ QColor VectorCanvasScene::deskColor() const {
     switch (m_bgType) {
     case BackgroundType::CanvaGrid:
     case BackgroundType::BlankLight:
-        return QColor("#ebedf2");
     case BackgroundType::WarmSepia:
-        return QColor("#ebe4d8");
+        return QColor("#14161f");
     case BackgroundType::ChalkboardGreen:
         return QColor("#0d1712");
     case BackgroundType::CalculusGrid:
@@ -119,9 +118,18 @@ QColor VectorCanvasScene::borderColor() const {
 
 QColor VectorCanvasScene::shadowColor() const {
     if (isLightBackground()) {
-        return QColor(15, 23, 42, 45);
+        return QColor(0, 0, 0, 110);
     }
     return QColor(0, 0, 0, 180);
+}
+
+void VectorCanvasScene::setHeaderTitle(const QString &title) {
+    if (m_headerTitle != title) {
+        m_headerTitle = title;
+        m_gridCacheDirty = true;
+        invalidate(sceneRect(), BackgroundLayer);
+        update();
+    }
 }
 
 void VectorCanvasScene::setPdfBackground(const QImage &img, int pageNumber) {
@@ -816,35 +824,51 @@ void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rec
     qreal bottom = rect.bottom();
 
     if (m_bgType == BackgroundType::CanvaGrid) {
-        // Canva Style School Grid: 5mm (20.0px) grid with reserved top header margin
-        const qreal step = 20.0;
-        const qreal topHeaderMargin = 90.0;
+        // Canva Style Student Grid:
+        // Proportions accurately mapped from Canva template (35 columns x 48 rows, 5mm grid)
+        // Left margin: 80.0px, Right margin: 80.0px -> Grid width = 1080.0px (35 columns)
+        // Top header margin: 148.0px, Bottom margin: 88.0px -> Grid height = 1518.0px (48 rows)
+        const qreal marginL = 80.0;
+        const qreal marginR = m_pageSize.width() - 80.0;
+        const qreal marginT = 148.0;
+        const qreal marginB = m_pageSize.height() - 88.0;
 
-        QPen linePen(QColor("#d9d9d9"), 0.8);
+        const int cols = 35;
+        const int rows = 48;
+        const qreal stepX = (marginR - marginL) / static_cast<qreal>(cols);
+        const qreal stepY = (marginB - marginT) / static_cast<qreal>(rows);
+
+        // 1. Grid Lines (delicate #d9d9d9 matching Canva SVG stroke)
+        QPen linePen(QColor("#d9d9d9"), 0.85);
         painter->setPen(linePen);
 
-        // Vertical lines (start below header line)
-        qreal startX = std::floor(left / step) * step;
-        qreal gridTop = qMax(top, topHeaderMargin);
-        for (qreal x = startX; x <= right; x += step) {
-            painter->drawLine(QPointF(x, gridTop), QPointF(x, bottom));
+        for (int i = 0; i <= rows; ++i) {
+            qreal y = marginT + i * stepY;
+            if (y >= top - 1.0 && y <= bottom + 1.0) {
+                painter->drawLine(QPointF(marginL, y), QPointF(marginR, y));
+            }
         }
 
-        // Horizontal lines (strictly below topHeaderMargin)
-        qreal startY = std::floor(gridTop / step) * step;
-        if (startY < topHeaderMargin) {
-            startY += step;
-        }
-        for (qreal y = startY; y <= bottom; y += step) {
-            painter->drawLine(QPointF(left, y), QPointF(right, y));
+        for (int j = 0; j <= cols; ++j) {
+            qreal x = marginL + j * stepX;
+            if (x >= left - 1.0 && x <= right + 1.0) {
+                painter->drawLine(QPointF(x, marginT), QPointF(x, marginB));
+            }
         }
 
-        // Top Header Divider Line
-        if (topHeaderMargin >= top && topHeaderMargin <= bottom) {
-            QPen headerPen(QColor("#c8cdd4"), 1.2);
-            painter->setPen(headerPen);
-            painter->drawLine(QPointF(left, topHeaderMargin), QPointF(right, topHeaderMargin));
+        // 2. Framed Grid Box Border
+        painter->drawRect(QRectF(marginL, marginT, marginR - marginL, marginB - marginT));
+
+        // 3. Header Title in top margin area (e.g. "Tarea de Matematicas I")
+        QString title = m_headerTitle.trimmed();
+        if (title.isEmpty()) {
+            title = QStringLiteral("Tarea de Matematicas I");
         }
+        QFont titleFont("Inter", 16, QFont::Bold);
+        titleFont.setStyleHint(QFont::SansSerif);
+        painter->setFont(titleFont);
+        painter->setPen(QColor("#111827"));
+        painter->drawText(QPointF(marginL, 108.0), title);
 
     } else if (m_bgType == BackgroundType::CalculusGrid) {
         // Minor grid every 25px, major master lines every 125px (5x)
