@@ -133,11 +133,8 @@ private:
     QImage m_pdfImage;
     int m_pdfPageNumber{-1};
 
-    // Cached Background Grid (drastically accelerates repaints & reduces CPU/GPU load)
-    QPixmap m_gridCache;
-    bool m_gridCacheDirty{true};
+    // Pure Vector Background Grid (lossless SVG/QPainter vector rendering at any zoom level)
     QString m_headerTitle;
-    void rebuildGridCache();
     void renderGridToPainter(QPainter *painter, const QRectF &rect);
 
     // Active stroke in progress
