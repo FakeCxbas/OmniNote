@@ -219,6 +219,10 @@ bool VectorCanvasView::shouldForwardToSceneWidgets(const QPointF &scenePos) cons
                 if (imgItem->isControlHit(localPos)) {
                     return true;
                 }
+                if (m_canvasScene && m_canvasScene->currentTool() == ToolType::Lasso &&
+                    imgItem->boundingRect().contains(localPos)) {
+                    return true;
+                }
             }
             if (curr->type() == FormulaBlockItem::Type) {
                 auto *formulaItem = static_cast<const FormulaBlockItem *>(curr);
@@ -348,6 +352,19 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
         m_interactingWithWidget = true;
         QGraphicsView::mousePressEvent(event);
         return;
+    }
+
+    // Direct mouse interaction with blocks:
+    // If clicking with a standard mouse directly on an image or formula, always forward so the user can immediately select/drag it
+    if (!isStylus && event->button() == Qt::LeftButton && m_canvasScene) {
+        const auto itemsAtPos = m_canvasScene->items(scenePos);
+        for (auto *it : itemsAtPos) {
+            if (it->type() == ImageBlockItem::Type || it->type() == FormulaBlockItem::Type) {
+                m_interactingWithWidget = true;
+                QGraphicsView::mousePressEvent(event);
+                return;
+            }
+        }
     }
 
     // Clear focus from any embedded code editor when clicking on the canvas
@@ -656,6 +673,10 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
         break;
 
     case QEvent::TabletMove:
+        if (m_interactingWithWidget) {
+            event->ignore();
+            return;
+        }
         if (m_isPanning) {
             if (event->pressure() <= 0.01 && !(event->buttons() & (Qt::LeftButton | Qt::MiddleButton))) {
                 m_isPanning = false;
@@ -687,6 +708,11 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
         break;
 
     case QEvent::TabletRelease:
+        if (m_interactingWithWidget) {
+            m_interactingWithWidget = false;
+            event->ignore();
+            return;
+        }
         if (m_isPanning) {
             m_isPanning = false;
             if (m_spacePressed) {

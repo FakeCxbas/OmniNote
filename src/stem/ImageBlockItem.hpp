@@ -48,12 +48,13 @@ public:
     void setBackgroundRemoved(bool removed);
     static QImage processRemoveBackground(const QImage &source, qreal tolerance = 0.15, qreal feather = 0.08);
 
-    bool isControlHit(const QPointF &localPos) const {
-        return closeButtonRect().contains(localPos) || magicButtonRect().contains(localPos) || (hitTestHandle(localPos) != NoHandle);
-    }
+    bool isControlHit(const QPointF &localPos) const;
+    bool isBorderHit(const QPointF &localPos, qreal tolerance = 10.0) const;
     ResizeHandle hitTestHandle(const QPointF &pos) const;
     QRectF closeButtonRect() const;
     QRectF magicButtonRect() const;
+    QRectF dragHandleRect() const;
+    QRectF headerRect() const;
 
 signals:
     void blockModified();
@@ -78,6 +79,8 @@ private:
 
     bool m_isHovered{false};
     bool m_isDragging{false};
+    bool m_isHoverDragHandle{false};
+    bool m_isHoverClose{false};
     ResizeHandle m_activeResizeHandle{NoHandle};
     ResizeHandle m_hoverResizeHandle{NoHandle};
 

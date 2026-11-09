@@ -751,12 +751,21 @@ void testImageBlockItemAndSerialization() {
     assert(imgItem.width() >= 150.0);
     assert(imgItem.height() >= 100.0);
 
-    // 2. Control hit testing
-    // Corner handles should be controls
+    // 2. Control hit testing & Drag handle
+    // Corner handles and header/drag handle should always be controls
     assert(imgItem.hitTestHandle(QPointF(0, 0)) == ImageBlockItem::TopLeft);
     assert(imgItem.isControlHit(QPointF(0, 0)));
-    // Center of image should NOT be a control so pen strokes can draw on top
-    assert(!imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.5)));
+    assert(!imgItem.dragHandleRect().isEmpty());
+    assert(imgItem.isControlHit(imgItem.dragHandleRect().center()));
+    assert(imgItem.isControlHit(QPointF(imgItem.width() * 0.5, 10.0))); // Header bar
+
+    // Center of unselected image should allow stylus drawing if not selected
+    assert(!imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.75)));
+
+    // When selected, the entire body becomes interactive for moving/dragging
+    imgItem.setSelected(true);
+    assert(imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.75)));
+    imgItem.setSelected(false);
 
     // 3. Serialize to JSON
     QString jsonStr = imgItem.serialize();
