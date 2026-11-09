@@ -197,9 +197,9 @@ QPixmap AppIcons::getPixmap(IconType type, const QColor &color, int size) {
     QString svgName = getSolarSvgName(type);
     QString rawSvg;
 
-    // 1. Try reading from Qt Resource System (:/icons/solar/...)
+    // 1. Try reading from Qt Resource System (:/icons/lucide/...)
     if (!svgName.isEmpty()) {
-        QString qrcPath = QString(":/icons/solar/%1").arg(svgName);
+        QString qrcPath = QString(":/icons/lucide/%1").arg(svgName);
         QFile file(qrcPath);
         if (file.open(QIODevice::ReadOnly)) {
             rawSvg = QString::fromUtf8(file.readAll());
@@ -209,10 +209,10 @@ QPixmap AppIcons::getPixmap(IconType type, const QColor &color, int size) {
     // 2. Try filesystem paths if not in qrc
     if (rawSvg.isEmpty() && !svgName.isEmpty()) {
         const QStringList candidatePaths = {
-            QString("assets/icons/solar/%1").arg(svgName),
-            QString("../assets/icons/solar/%1").arg(svgName),
-            QCoreApplication::applicationDirPath() + QString("/../assets/icons/solar/%1").arg(svgName),
-            QCoreApplication::applicationDirPath() + QString("/assets/icons/solar/%1").arg(svgName)
+            QString("assets/icons/%1").arg(svgName),
+            QString("../assets/icons/%1").arg(svgName),
+            QCoreApplication::applicationDirPath() + QString("/../assets/icons/%1").arg(svgName),
+            QCoreApplication::applicationDirPath() + QString("/assets/icons/%1").arg(svgName)
         };
         for (const auto &p : candidatePaths) {
             QFile file(p);
@@ -228,6 +228,7 @@ QPixmap AppIcons::getPixmap(IconType type, const QColor &color, int size) {
         rawSvg = getSvgXml(type, color.name());
     } else {
         QString colorHex = color.name();
+        rawSvg.replace(QStringLiteral("currentColor"), colorHex);
         rawSvg.replace(QStringLiteral("fill=\"black\""), QString("fill=\"%1\"").arg(colorHex));
         rawSvg.replace(QStringLiteral("stroke=\"black\""), QString("stroke=\"%1\"").arg(colorHex));
     }

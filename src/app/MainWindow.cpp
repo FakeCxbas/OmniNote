@@ -268,6 +268,7 @@ void MainWindow::setupToolbars() {
     m_toolActionGroup->setExclusive(true);
 
     m_penAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Pen, QColor("#7aa2f7"), 22), "Lápiz (P)");
+    m_penAction->setToolTip("Lápiz (P) — Escritura y dibujo a mano alzada con presión y estabilización");
     m_penAction->setCheckable(true);
     m_penAction->setChecked(true);
     m_penAction->setShortcut(QKeySequence(Qt::Key_P));
@@ -275,30 +276,35 @@ void MainWindow::setupToolbars() {
     m_toolActionGroup->addAction(m_penAction);
 
     m_highlighterAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Highlighter, QColor("#e0af68"), 22), "Resaltador (H)");
+    m_highlighterAction->setToolTip("Resaltador (H) — Resaltado translúcido para fórmulas y texto");
     m_highlighterAction->setCheckable(true);
     m_highlighterAction->setShortcut(QKeySequence(Qt::Key_H));
     m_highlighterAction->setData(static_cast<int>(ToolType::Highlighter));
     m_toolActionGroup->addAction(m_highlighterAction);
 
     m_eraserAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Eraser, QColor("#f7768e"), 22), "Borrador (E)");
+    m_eraserAction->setToolTip("Borrador (E) — Borrado preciso de trazos completos o cortes");
     m_eraserAction->setCheckable(true);
     m_eraserAction->setShortcut(QKeySequence(Qt::Key_E));
     m_eraserAction->setData(static_cast<int>(ToolType::Eraser));
     m_toolActionGroup->addAction(m_eraserAction);
 
     m_lassoAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Lasso, QColor("#bb9af7"), 22), "Lazo (L)");
+    m_lassoAction->setToolTip("Lazo de Selección (L) — Seleccionar, mover, duplicar y transformar trazos y bloques");
     m_lassoAction->setCheckable(true);
     m_lassoAction->setShortcut(QKeySequence(Qt::Key_L));
     m_lassoAction->setData(static_cast<int>(ToolType::Lasso));
     m_toolActionGroup->addAction(m_lassoAction);
 
     m_shapeAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Shapes, QColor("#7dcfff"), 22), "Formas (S)");
+    m_shapeAction->setToolTip("Formas Geométricas (S) — Línea, Ejes 2D/3D, Rectángulo y Círculo");
     m_shapeAction->setCheckable(true);
     m_shapeAction->setShortcut(QKeySequence(Qt::Key_S));
     m_shapeAction->setData(static_cast<int>(ToolType::ShapeLine));
     m_toolActionGroup->addAction(m_shapeAction);
 
     m_shapeCombo = new QComboBox(toolsBar);
+    m_shapeCombo->setToolTip("Seleccionar tipo de forma geométrica activa");
     m_shapeCombo->setMaximumWidth(110);
     m_shapeCombo->addItem(AppIcons::get(AppIcons::IconType::StraightLine, QColor("#7dcfff"), 16), "Línea", static_cast<int>(ToolType::ShapeLine));
     m_shapeCombo->addItem(AppIcons::get(AppIcons::IconType::Axes2D, QColor("#7dcfff"), 16), "Ejes 2D", static_cast<int>(ToolType::ShapeAxes2D));
@@ -316,7 +322,7 @@ void MainWindow::setupToolbars() {
     m_textBlockAction->setCheckable(true);
     m_textBlockAction->setShortcut(QKeySequence(Qt::Key_T));
     m_textBlockAction->setData(static_cast<int>(ToolType::Text));
-    m_textBlockAction->setToolTip("Herramienta Texto (T): haz clic en el lienzo para escribir en ese punto");
+    m_textBlockAction->setToolTip("Herramienta Texto (T) — Haz clic en el lienzo para escribir texto formateado");
     m_toolActionGroup->addAction(m_textBlockAction);
     connect(m_textBlockAction, &QAction::triggered, this, [this]() {
         if (m_currentScene) {
@@ -326,43 +332,45 @@ void MainWindow::setupToolbars() {
 
     m_codeBlockAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Code, QColor("#9ece6a"), 22), "Código (C)");
     m_codeBlockAction->setShortcut(QKeySequence(Qt::Key_C));
+    m_codeBlockAction->setToolTip("Bloque de Código (C) — Insertar bloque de código fuente C++ con sintaxis");
     connect(m_codeBlockAction, &QAction::triggered, this, &MainWindow::onInsertCodeBlock);
 
     m_plotAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Plot, QColor("#2ac3de"), 22), "Graficar (F)");
     m_plotAction->setShortcut(QKeySequence(Qt::Key_F));
+    m_plotAction->setToolTip("Graficar Función (F) — Generar gráfico cartesiano interactivo de funciones matemáticas");
     connect(m_plotAction, &QAction::triggered, this, &MainWindow::onPlotFunctionDialog);
 
     m_imageAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Image, QColor("#ff9e64"), 22), "Imagen (I)");
     m_imageAction->setShortcut(QKeySequence(Qt::Key_I));
-    m_imageAction->setToolTip("Insertar imagen desde archivo (o pegar directo con Ctrl+V)");
+    m_imageAction->setToolTip("Insertar Imagen (I) — Cargar imagen desde archivo o pegar directo con Ctrl+V");
     connect(m_imageAction, &QAction::triggered, this, &MainWindow::onInsertImageFromFile);
 
     m_formulaAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Formula, QColor("#bb9af7"), 22), "Fórmula (M)");
     m_formulaAction->setShortcut(QKeySequence(Qt::Key_M));
-    m_formulaAction->setToolTip("Insertar fórmula matemática LaTeX");
+    m_formulaAction->setToolTip("Fórmula Matemática LaTeX (M) — Insertar ecuación matemática renderizada en LaTeX");
     connect(m_formulaAction, &QAction::triggered, this, &MainWindow::onInsertFormulaBlock);
 
     m_rulerAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Ruler, QColor("#7dcfff"), 22), "Regla (R)");
     m_rulerAction->setCheckable(true);
     m_rulerAction->setChecked(false);
     m_rulerAction->setShortcut(QKeySequence(Qt::Key_R));
-    m_rulerAction->setToolTip("Mostrar/Ocultar Regla Virtual STEM para trazos rectos exactos");
+    m_rulerAction->setToolTip("Regla STEM (R) — Activar/Ocultar regla milimetrada con ajuste angular");
     connect(m_rulerAction, &QAction::triggered, this, &MainWindow::onToggleVirtualRuler);
 
     toolsBar->addSeparator();
 
     auto *saveAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Save, QColor("#7aa2f7"), 22), "Guardar (Ctrl+S)");
     saveAction->setShortcut(QKeySequence::Save);
-    saveAction->setToolTip("Guardar apuntes actuales (Ctrl+S)");
+    saveAction->setToolTip("Guardar apuntes actuales en base de datos local (Ctrl+S)");
     connect(saveAction, &QAction::triggered, this, &MainWindow::onSaveCurrentPage);
 
     m_cloudSyncAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Cloud, QColor("#7dcfff"), 22), "Google Drive");
-    m_cloudSyncAction->setToolTip("Sincronización en la Nube con Google Drive (Copias SQLite y PDF)");
+    m_cloudSyncAction->setToolTip("Google Drive — Sincronización en la nube y respaldos automáticos");
     connect(m_cloudSyncAction, &QAction::triggered, this, &MainWindow::showCloudSyncDialog);
 
     m_helpAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Help, QColor("#bb9af7"), 22), "Ayuda (F1)");
     m_helpAction->setShortcut(QKeySequence("F1"));
-    m_helpAction->setToolTip("Guía de atajos de teclado y herramientas STEM (F1)");
+    m_helpAction->setToolTip("Ayuda y Atajos (F1) — Guía interactiva de teclado y herramientas STEM");
     connect(m_helpAction, &QAction::triggered, this, &MainWindow::showShortcutsGuide);
 
     // ==================== Toolbar 2: Style, Colors, Grid & PDF ====================
