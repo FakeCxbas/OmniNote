@@ -590,6 +590,12 @@ void MainWindow::onGridTypeChanged(int index) {
     if (m_currentPageId > 0) {
         m_storage.updatePageBackground(m_currentPageId, static_cast<int>(bgType));
     }
+    if (bgType == BackgroundType::CanvaGrid) {
+        updateCanvasHeaderTitle();
+    }
+    if (m_canvasView) {
+        m_canvasView->setBackgroundBrush(m_currentScene->deskColor());
+    }
     markModified();
 }
 
@@ -1087,6 +1093,7 @@ void MainWindow::switchPage(qint64 pageId) {
             if (p.id == pageId) {
                 auto bg = static_cast<BackgroundType>(p.backgroundType);
                 m_currentScene->setBackgroundType(bg);
+                updateCanvasHeaderTitle();
                 QSignalBlocker blocker(m_gridCombo);
                 int idx = m_gridCombo->findData(p.backgroundType);
                 if (idx >= 0) m_gridCombo->setCurrentIndex(idx);
@@ -1238,6 +1245,40 @@ void MainWindow::ensureActivePageForSave() {
     } else {
         m_currentPageId = pages.first().id;
     }
+    updateCanvasHeaderTitle();
+}
+
+void MainWindow::updateCanvasHeaderTitle() {
+    if (!m_currentScene) return;
+
+    QString headerTitle;
+    QString subjName;
+    for (const auto &s : m_storage.getSubjects()) {
+        if (s.id == m_currentSubjectId) {
+            subjName = s.name.trimmed();
+            break;
+        }
+    }
+
+    QString nbTitle = m_storage.getNotebookTitle(m_currentNotebookId).trimmed();
+
+    if (!subjName.isEmpty()) {
+        if (subjName.startsWith("Tarea", Qt::CaseInsensitive)) {
+            headerTitle = subjName;
+        } else {
+            headerTitle = QStringLiteral("Tarea de %1").arg(subjName);
+        }
+    } else if (!nbTitle.isEmpty()) {
+        if (nbTitle.startsWith("Tarea", Qt::CaseInsensitive)) {
+            headerTitle = nbTitle;
+        } else {
+            headerTitle = QStringLiteral("Tarea de %1").arg(nbTitle);
+        }
+    } else {
+        headerTitle = QStringLiteral("Tarea de Matematicas I");
+    }
+
+    m_currentScene->setHeaderTitle(headerTitle);
 }
 
 void MainWindow::onSaveCurrentPage() {

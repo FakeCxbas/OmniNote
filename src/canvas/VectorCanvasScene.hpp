@@ -44,6 +44,9 @@ public:
     QColor borderColor() const;
     QColor shadowColor() const;
 
+    QString headerTitle() const { return m_headerTitle; }
+    void setHeaderTitle(const QString &title);
+
     void setPdfBackground(const QImage &img, int pageNumber = 0);
     void clearPdfBackground();
     bool hasPdfBackground() const { return !m_pdfImage.isNull(); }
@@ -130,6 +133,7 @@ private:
     // Cached Background Grid (drastically accelerates repaints & reduces CPU/GPU load)
     QPixmap m_gridCache;
     bool m_gridCacheDirty{true};
+    QString m_headerTitle;
     void rebuildGridCache();
     void renderGridToPainter(QPainter *painter, const QRectF &rect);
 

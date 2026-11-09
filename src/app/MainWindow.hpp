@@ -95,6 +95,7 @@ private:
     void switchPage(qint64 pageId);
     void markModified();
     void ensureActivePageForSave();
+    void updateCanvasHeaderTitle();
     void syncToLocalCloudFolder(bool notifyUser = false);
     void scheduleBackgroundDrivePageSync(qint64 notebookId, qint64 pageId);
     void triggerNextPendingDriveSync();
