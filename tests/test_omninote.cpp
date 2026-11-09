@@ -353,7 +353,7 @@ void testStrokeWidthControl() {
     std::cout << "[TEST] 8. Interactive StrokeWidthControl..." << std::endl;
 
     StrokeWidthControl control;
-    assert(std::abs(control.currentWidth() - 2.5) < 1e-6);
+    assert(std::abs(control.currentWidth() - 1.5) < 1e-6);
 
     double lastEmittedWidth = 0.0;
     QObject::connect(&control, &StrokeWidthControl::widthChanged, [&lastEmittedWidth](double w) {

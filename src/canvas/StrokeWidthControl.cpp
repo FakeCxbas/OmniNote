@@ -115,7 +115,7 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
     // Fluid Interactive Slider (1 to 60 -> 0.5 px to 30.0 px)
     m_slider = new QSlider(Qt::Horizontal, this);
     m_slider->setRange(1, 60);
-    m_slider->setValue(5); // 2.5 px
+    m_slider->setValue(3); // 1.5 px (Canva pen handwriting standard)
     m_slider->setFixedWidth(70);
     m_slider->setToolTip("Desliza para ajustar grosor o usa la rueda del ratón");
     m_slider->setStyleSheet(
@@ -145,7 +145,7 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
     layout->addWidget(m_slider);
 
     // Value badge
-    m_valLabel = new QLabel("2.5 px", this);
+    m_valLabel = new QLabel("1.5 px", this);
     m_valLabel->setFixedWidth(46);
     m_valLabel->setAlignment(Qt::AlignCenter);
     m_valLabel->setStyleSheet(
@@ -173,11 +173,11 @@ StrokeWidthControl::StrokeWidthControl(QWidget *parent) : QWidget(parent) {
         emit widthChanged(w);
     });
 
-    updatePresetStates(2.5);
+    updatePresetStates(1.5);
 }
 
 double StrokeWidthControl::currentWidth() const {
-    return m_slider ? (m_slider->value() * 0.5) : 2.5;
+    return m_slider ? (m_slider->value() * 0.5) : 1.5;
 }
 
 void StrokeWidthControl::setWidth(double w) {

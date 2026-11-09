@@ -13,9 +13,9 @@ static inline qreal fastCanvaPressureFactor(qreal p) {
         std::array<qreal, 256> table;
         for (int i = 0; i < 256; ++i) {
             qreal normalizedP = static_cast<qreal>(i) / 255.0;
-            // Canva pen dynamics: solid ink body with natural organic modulation
-            // p=0.0 -> 0.78, p=0.5 -> 0.985 (~1.00), p=1.0 -> 1.22
-            table[i] = 0.78 + 0.44 * std::pow(normalizedP, 1.1);
+            // Canva pen dynamics: stable, uniform ink body with gentle organic modulation
+            // p=0.0 -> 0.85, p=0.5 -> 0.98 (~1.00), p=1.0 -> 1.15
+            table[i] = 0.85 + 0.30 * std::pow(normalizedP, 1.2);
         }
         return table;
     }();
@@ -222,86 +222,106 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
         painter->restore();
     } else if (m_toolType == ToolType::Pen) {
         const auto &pts = m_smoothedPoints.isEmpty() ? m_points : m_smoothedPoints;
-        if (pts.size() == 1) {
+        const int n = pts.size();
+        if (n == 0) return;
+
+        if (n == 1) {
             qreal pr = qBound(0.0, pts[0].pressure, 1.0);
-            qreal r = qMax(0.8, m_baseWidth * fastCanvaPressureFactor(pr) * 0.5);
+            qreal r = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(pr) * 0.5);
             painter->setPen(Qt::NoPen);
             painter->setBrush(m_color);
             painter->drawEllipse(pts[0].pos, r, r);
+        } else if (n == 2) {
+            qreal pAvg = (pts[0].pressure + pts[1].pressure) * 0.5;
+            qreal w = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(pAvg));
+            QPen pen(m_color, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter->setPen(pen);
+            painter->setBrush(Qt::NoBrush);
+            painter->drawLine(pts[0].pos, pts[1].pos);
         } else {
-            // Check if pressure is virtually identical across the entire stroke
-            bool uniformPressure = true;
-            const qreal firstPressure = pts[0].pressure;
+            // Canva-grade vector inking: continuous quadratic Bezier midpoint splines
+            // Eliminates stepped "caterpillar" joints and produces silky smooth, anti-aliased curves.
+            qreal minP = 1.0, maxP = 0.0, sumP = 0.0;
             for (const auto &p : pts) {
-                if (std::abs(p.pressure - firstPressure) > 0.03) {
-                    uniformPressure = false;
-                    break;
-                }
+                if (p.pressure < minP) minP = p.pressure;
+                if (p.pressure > maxP) maxP = p.pressure;
+                sumP += p.pressure;
             }
+            qreal avgP = sumP / static_cast<qreal>(n);
 
-            if (uniformPressure && pts.size() < 6) {
-                qreal w = qMax(0.75, m_baseWidth * fastCanvaPressureFactor(firstPressure));
+            // Cumulative distance along the stroke for natural stroke entry/exit tapering
+            qreal totalLength = 0.0;
+            QVector<qreal> cumDist;
+            cumDist.reserve(n);
+            cumDist.append(0.0);
+            for (int i = 0; i < n - 1; ++i) {
+                totalLength += std::hypot(pts[i + 1].pos.x() - pts[i].pos.x(),
+                                          pts[i + 1].pos.y() - pts[i].pos.y());
+                cumDist.append(totalLength);
+            }
+            const qreal taperWindow = qMin(8.0, totalLength * 0.20);
+
+            if ((maxP - minP <= 0.10) && (totalLength <= 14.0 || taperWindow <= 0.5)) {
+                // Highly uniform or short stroke: single continuous Bezier path
+                QPainterPath path;
+                path.moveTo(pts[0].pos);
+                for (int i = 1; i < n - 1; ++i) {
+                    QPointF mid = (pts[i].pos + pts[i + 1].pos) * 0.5;
+                    path.quadTo(pts[i].pos, mid);
+                }
+                path.lineTo(pts.last().pos);
+
+                qreal w = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(avgP));
                 QPen pen(m_color, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
                 painter->setPen(pen);
                 painter->setBrush(Qt::NoBrush);
-                QPolygonF poly;
-                poly.reserve(pts.size());
-                for (const auto &p : pts) {
-                    poly << p.pos;
-                }
-                painter->drawPolyline(poly);
+                painter->strokePath(path, pen);
             } else {
-                // Expressive pressure dynamics with subtle natural stroke tapering (Canva pen feel)
-                const int totalSegs = pts.size() - 1;
-
-                // Calculate cumulative arc length along stroke for smooth spatial tapering
-                qreal totalLength = 0.0;
-                QVector<qreal> cumDist;
-                cumDist.reserve(pts.size());
-                cumDist.append(0.0);
-                for (int i = 0; i < totalSegs; ++i) {
-                    qreal dx = pts[i + 1].pos.x() - pts[i].pos.x();
-                    qreal dy = pts[i + 1].pos.y() - pts[i].pos.y();
-                    totalLength += std::hypot(dx, dy);
-                    cumDist.append(totalLength);
-                }
-
-                // Taper spatial window (up to 10px or 25% of total stroke length)
-                const qreal taperWindow = qMin(10.0, totalLength * 0.25);
-
+                // Dynamic pressure and natural tapering: smooth quadratic Bezier spans
                 painter->setBrush(Qt::NoBrush);
-                qreal lastW = -1.0;
                 QPen segPen(m_color, m_baseWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
 
-                for (int i = 0; i < totalSegs; ++i) {
-                    qreal pAvg = qBound(0.0, (pts[i].pressure + pts[i + 1].pressure) * 0.5, 1.0);
+                // Start segment: from pts[0] to first midpoint
+                QPointF mid0 = (pts[0].pos + pts[1].pos) * 0.5;
+                qreal p0 = pts[0].pressure;
+                qreal taper0 = (totalLength > 3.0 && taperWindow > 0.5) ? 0.88 : 1.0;
+                segPen.setWidthF(qMax(0.6, m_baseWidth * fastCanvaPressureFactor(p0) * taper0));
+                painter->setPen(segPen);
+                painter->drawLine(pts[0].pos, mid0);
 
-                    // Distance from start and distance to end at segment midpoint
-                    qreal segMidDist = (cumDist[i] + cumDist[i + 1]) * 0.5;
-                    qreal distFromStart = segMidDist;
-                    qreal distFromEnd = totalLength - segMidDist;
-
+                // Intermediate quadratic Bezier spans between consecutive midpoints
+                QPointF prevMid = mid0;
+                for (int i = 1; i < n - 1; ++i) {
+                    QPointF nextMid = (pts[i].pos + pts[i + 1].pos) * 0.5;
+                    qreal segDist = cumDist[i];
                     qreal taper = 1.0;
                     if (totalLength > 3.0 && taperWindow > 0.5) {
-                        if (distFromStart < taperWindow) {
-                            qreal u = distFromStart / taperWindow;
-                            // Smooth cubic Hermite ease-in from 0.82 to 1.00
-                            taper = 0.82 + 0.18 * (3.0 * u * u - 2.0 * u * u * u);
-                        } else if (distFromEnd < taperWindow) {
-                            qreal u = distFromEnd / taperWindow;
-                            // Smooth cubic Hermite ease-out from 1.00 to 0.78
-                            taper = 0.78 + 0.22 * (3.0 * u * u - 2.0 * u * u * u);
+                        if (segDist < taperWindow) {
+                            qreal u = segDist / taperWindow;
+                            taper = 0.88 + 0.12 * (3.0 * u * u - 2.0 * u * u * u);
+                        } else if (totalLength - segDist < taperWindow) {
+                            qreal u = (totalLength - segDist) / taperWindow;
+                            taper = 0.88 + 0.12 * (3.0 * u * u - 2.0 * u * u * u);
                         }
                     }
+                    qreal segW = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(pts[i].pressure) * taper);
+                    segPen.setWidthF(segW);
+                    painter->setPen(segPen);
 
-                    qreal segWidth = qMax(0.75, m_baseWidth * fastCanvaPressureFactor(pAvg) * taper);
-                    if (std::abs(segWidth - lastW) > 0.03) {
-                        segPen.setWidthF(segWidth);
-                        painter->setPen(segPen);
-                        lastW = segWidth;
-                    }
-                    painter->drawLine(pts[i].pos, pts[i + 1].pos);
+                    QPainterPath quadSpan;
+                    quadSpan.moveTo(prevMid);
+                    quadSpan.quadTo(pts[i].pos, nextMid);
+                    painter->strokePath(quadSpan, segPen);
+
+                    prevMid = nextMid;
                 }
+
+                // Final segment: from last midpoint to pts[n - 1]
+                qreal pn = pts[n - 1].pressure;
+                qreal tapern = (totalLength > 3.0 && taperWindow > 0.5) ? 0.88 : 1.0;
+                segPen.setWidthF(qMax(0.6, m_baseWidth * fastCanvaPressureFactor(pn) * tapern));
+                painter->setPen(segPen);
+                painter->drawLine(prevMid, pts[n - 1].pos);
             }
         }
     } else {

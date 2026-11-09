@@ -24,7 +24,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    double m_width{2.5};
+    double m_width{1.5};
     QColor m_color{QColor("#7aa2f7")};
 };
 
