@@ -58,7 +58,7 @@ private:
     bool m_hasPrevious{false};
     QPointF m_filteredPos;
     qreal m_filteredPressure{0.5};
-    qreal m_alpha{0.69}; // Enhanced assistance filter weight for stable handwriting
+    qreal m_alpha{0.80}; // Canva-fluid assistance filter weight for ultra-responsive handwriting
 };
 
 } // namespace OmniNote

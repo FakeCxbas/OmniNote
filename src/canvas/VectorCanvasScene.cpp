@@ -54,6 +54,76 @@ void VectorCanvasScene::setBackgroundType(BackgroundType type) {
     update();
 }
 
+bool VectorCanvasScene::isLightBackground() const {
+    return m_bgType == BackgroundType::CanvaGrid ||
+           m_bgType == BackgroundType::WarmSepia ||
+           m_bgType == BackgroundType::BlankLight;
+}
+
+QColor VectorCanvasScene::sheetColor() const {
+    switch (m_bgType) {
+    case BackgroundType::CanvaGrid:
+    case BackgroundType::BlankLight:
+        return QColor("#ffffff");
+    case BackgroundType::WarmSepia:
+        return QColor("#fbf8f1");
+    case BackgroundType::ChalkboardGreen:
+        return QColor("#182920");
+    case BackgroundType::CalculusGrid:
+    case BackgroundType::EngineeringMillimeter:
+    case BackgroundType::Isometric:
+    case BackgroundType::Dotted:
+    case BackgroundType::Blank:
+    default:
+        return QColor("#14161c");
+    }
+}
+
+QColor VectorCanvasScene::deskColor() const {
+    switch (m_bgType) {
+    case BackgroundType::CanvaGrid:
+    case BackgroundType::BlankLight:
+        return QColor("#ebedf2");
+    case BackgroundType::WarmSepia:
+        return QColor("#ebe4d8");
+    case BackgroundType::ChalkboardGreen:
+        return QColor("#0d1712");
+    case BackgroundType::CalculusGrid:
+    case BackgroundType::EngineeringMillimeter:
+    case BackgroundType::Isometric:
+    case BackgroundType::Dotted:
+    case BackgroundType::Blank:
+    default:
+        return QColor("#090a0f");
+    }
+}
+
+QColor VectorCanvasScene::borderColor() const {
+    switch (m_bgType) {
+    case BackgroundType::CanvaGrid:
+    case BackgroundType::BlankLight:
+        return QColor("#d0d7de");
+    case BackgroundType::WarmSepia:
+        return QColor("#dcd3c4");
+    case BackgroundType::ChalkboardGreen:
+        return QColor("#325240");
+    case BackgroundType::CalculusGrid:
+    case BackgroundType::EngineeringMillimeter:
+    case BackgroundType::Isometric:
+    case BackgroundType::Dotted:
+    case BackgroundType::Blank:
+    default:
+        return QColor("#546694");
+    }
+}
+
+QColor VectorCanvasScene::shadowColor() const {
+    if (isLightBackground()) {
+        return QColor(15, 23, 42, 45);
+    }
+    return QColor(0, 0, 0, 180);
+}
+
 void VectorCanvasScene::setPdfBackground(const QImage &img, int pageNumber) {
     m_pdfImage = img;
     m_pdfPageNumber = pageNumber;
@@ -249,10 +319,10 @@ void VectorCanvasScene::handlePointerMove(const QPointF &scenePos, qreal pressur
             }
         }
 
-        // Distance filter to drop micro-tremors and redundant events (< 0.5px)
+        // Distance filter to drop micro-tremors and redundant events (< 0.2px)
         qreal dx = effectivePos.x() - m_lastInputPos.x();
         qreal dy = effectivePos.y() - m_lastInputPos.y();
-        if (dx * dx + dy * dy < 0.25) {
+        if (dx * dx + dy * dy < 0.04) {
             return;
         }
         m_lastInputPos = effectivePos;
@@ -688,7 +758,7 @@ void VectorCanvasScene::rebuildGridCache() {
     int h = qMax(100, static_cast<int>(std::ceil(m_pageSize.height())));
 
     m_gridCache = QPixmap(w, h);
-    m_gridCache.fill(QColor("#14161C")); // Dark Mode Sheet Surface (#14161C)
+    m_gridCache.fill(sheetColor());
 
     QPainter painter(&m_gridCache);
     if (!m_pdfImage.isNull()) {
@@ -701,13 +771,14 @@ void VectorCanvasScene::rebuildGridCache() {
 
 void VectorCanvasScene::drawBackground(QPainter *painter, const QRectF &rect) {
     // 1. Fill outer workspace desk area (outside the sheet)
-    painter->fillRect(rect, QColor("#090A0F"));
+    painter->fillRect(rect, deskColor());
 
     const QRectF sheet = pageRect();
     const QRectF visibleSheet = sheet.intersected(rect);
 
-    // 2. Strong page drop shadow
-    painter->fillRect(sheet.translated(8.0, 8.0).intersected(rect), QColor(0, 0, 0, 180));
+    // 2. Drop shadow with depth depending on theme
+    const qreal shadowOffset = isLightBackground() ? 5.0 : 8.0;
+    painter->fillRect(sheet.translated(shadowOffset, shadowOffset).intersected(rect), shadowColor());
 
     if (!visibleSheet.isEmpty()) {
         if (m_gridCacheDirty || m_gridCache.isNull() || m_gridCache.size() != m_pageSize.toSize()) {
@@ -721,7 +792,7 @@ void VectorCanvasScene::drawBackground(QPainter *painter, const QRectF &rect) {
 
     // 4. Crisp Sheet Border so the user clearly sees the page limits
     painter->save();
-    painter->setPen(QPen(QColor("#546694"), 2.0));
+    painter->setPen(QPen(borderColor(), isLightBackground() ? 1.0 : 2.0));
     painter->setBrush(Qt::NoBrush);
     painter->drawRect(sheet);
     painter->restore();
@@ -732,7 +803,7 @@ void VectorCanvasScene::drawGrid(QPainter *painter, const QRectF &rect) {
 }
 
 void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rect) {
-    if (m_bgType == BackgroundType::Blank) {
+    if (m_bgType == BackgroundType::Blank || m_bgType == BackgroundType::BlankLight) {
         return;
     }
 
@@ -744,13 +815,82 @@ void VectorCanvasScene::renderGridToPainter(QPainter *painter, const QRectF &rec
     qreal top = rect.top();
     qreal bottom = rect.bottom();
 
-    if (m_bgType == BackgroundType::CalculusGrid) {
+    if (m_bgType == BackgroundType::CanvaGrid) {
+        // Canva Style School Grid: 5mm (20.0px) grid with reserved top header margin
+        const qreal step = 20.0;
+        const qreal topHeaderMargin = 90.0;
+
+        QPen linePen(QColor("#d9d9d9"), 0.8);
+        painter->setPen(linePen);
+
+        // Vertical lines (start below header line)
+        qreal startX = std::floor(left / step) * step;
+        qreal gridTop = qMax(top, topHeaderMargin);
+        for (qreal x = startX; x <= right; x += step) {
+            painter->drawLine(QPointF(x, gridTop), QPointF(x, bottom));
+        }
+
+        // Horizontal lines (strictly below topHeaderMargin)
+        qreal startY = std::floor(gridTop / step) * step;
+        if (startY < topHeaderMargin) {
+            startY += step;
+        }
+        for (qreal y = startY; y <= bottom; y += step) {
+            painter->drawLine(QPointF(left, y), QPointF(right, y));
+        }
+
+        // Top Header Divider Line
+        if (topHeaderMargin >= top && topHeaderMargin <= bottom) {
+            QPen headerPen(QColor("#c8cdd4"), 1.2);
+            painter->setPen(headerPen);
+            painter->drawLine(QPointF(left, topHeaderMargin), QPointF(right, topHeaderMargin));
+        }
+
+    } else if (m_bgType == BackgroundType::CalculusGrid) {
         // Minor grid every 25px, major master lines every 125px (5x)
         const qreal minorStep = 25.0;
         const qreal majorStep = 125.0;
 
         QPen minorPen(QColor("#36415e"), 1.0);
         QPen majorPen(QColor("#546694"), 1.5);
+
+        qreal startX = std::floor(left / minorStep) * minorStep;
+        for (qreal x = startX; x <= right; x += minorStep) {
+            bool isMajor = std::abs(std::fmod(x, majorStep)) < 1.0;
+            painter->setPen(isMajor ? majorPen : minorPen);
+            painter->drawLine(QPointF(x, top), QPointF(x, bottom));
+        }
+
+        qreal startY = std::floor(top / minorStep) * minorStep;
+        for (qreal y = startY; y <= bottom; y += minorStep) {
+            bool isMajor = std::abs(std::fmod(y, majorStep)) < 1.0;
+            painter->setPen(isMajor ? majorPen : minorPen);
+            painter->drawLine(QPointF(left, y), QPointF(right, y));
+        }
+
+    } else if (m_bgType == BackgroundType::WarmSepia) {
+        // Warm Cream Paper with subtle warm lines
+        const qreal step = 25.0;
+        QPen sepiaPen(QColor("#e2d8c6"), 0.9);
+        painter->setPen(sepiaPen);
+
+        qreal startX = std::floor(left / step) * step;
+        for (qreal x = startX; x <= right; x += step) {
+            painter->drawLine(QPointF(x, top), QPointF(x, bottom));
+        }
+
+        qreal startY = std::floor(top / step) * step;
+        for (qreal y = startY; y <= bottom; y += step) {
+            painter->drawLine(QPointF(left, y), QPointF(right, y));
+        }
+
+    } else if (m_bgType == BackgroundType::ChalkboardGreen) {
+        // Classic Chalkboard with chalk green grid
+        const qreal minorStep = 25.0;
+        const qreal majorStep = 125.0;
+
+        QPen minorPen(QColor(65, 105, 80, 100), 0.9);
+        QPen majorPen(QColor(85, 135, 105, 150), 1.3);
 
         qreal startX = std::floor(left / minorStep) * minorStep;
         for (qreal x = startX; x <= right; x += minorStep) {

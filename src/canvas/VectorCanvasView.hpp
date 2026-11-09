@@ -29,6 +29,9 @@ public slots:
     void setZoomFactor(qreal factor);
     void updateToolCursor();
     void showLatexEditor(class FormulaBlockItem *item = nullptr);
+    QPointF mapToSceneF(const QPointF &pos) const {
+        return viewportTransform().inverted().map(pos);
+    }
 
 signals:
     void zoomChanged(qreal zoomFactor);

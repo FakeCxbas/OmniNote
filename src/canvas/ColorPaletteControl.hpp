@@ -39,10 +39,12 @@ public:
     explicit ColorPaletteControl(QWidget *parent = nullptr);
 
     QColor currentColor() const { return m_currentColor; }
+    bool isLightMode() const { return m_isLightMode; }
 
 public slots:
     void setCurrentColor(const QColor &color);
     void setCustomColor(const QColor &color);
+    void setLightMode(bool isLight);
 
 signals:
     void colorSelected(const QColor &color);
@@ -54,6 +56,7 @@ private:
     ColorSwatchButton *m_customButton{nullptr};
     QColor m_currentColor{QColor("#ffffff")};
     QColor m_customColor{QColor("#ff007f")};
+    bool m_isLightMode{false};
 };
 
 } // namespace OmniNote

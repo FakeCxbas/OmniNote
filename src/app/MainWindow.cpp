@@ -372,19 +372,21 @@ void MainWindow::setupToolbars() {
     styleBar->setIconSize(QSize(22, 22));
 
     m_widthControl = new StrokeWidthControl(styleBar);
-    m_widthControl->setColor(QColor("#ffffff"));
+    m_widthControl->setColor(QColor("#002b80"));
     connect(m_widthControl, &StrokeWidthControl::widthChanged, this, &MainWindow::onStrokeWidthChanged);
     styleBar->addWidget(m_widthControl);
 
     styleBar->addSeparator();
 
     m_colorPalette = new ColorPaletteControl(styleBar);
-    m_colorPalette->setCurrentColor(QColor("#ffffff"));
+    m_colorPalette->setLightMode(true);
+    m_colorPalette->setCurrentColor(QColor("#002b80"));
     if (m_currentScene) {
-        m_currentScene->setCurrentColor(QColor("#ffffff"));
+        m_currentScene->setBackgroundType(BackgroundType::CanvaGrid);
+        m_currentScene->setCurrentColor(QColor("#002b80"));
     }
     if (m_widthControl) {
-        m_widthControl->setColor(QColor("#ffffff"));
+        m_widthControl->setColor(QColor("#002b80"));
     }
     connect(m_colorPalette, &ColorPaletteControl::colorSelected, this, &MainWindow::onColorSelected);
     connect(m_colorPalette, &ColorPaletteControl::customColorRequested, this, &MainWindow::onCustomColorDialog);
@@ -395,12 +397,17 @@ void MainWindow::setupToolbars() {
     auto *gridLabel = new QLabel(" Papel: ", styleBar);
     styleBar->addWidget(gridLabel);
     m_gridCombo = new QComboBox(styleBar);
-    m_gridCombo->setMaximumWidth(125);
-    m_gridCombo->addItem("Cuadrícula Cálculo", static_cast<int>(BackgroundType::CalculusGrid));
+    m_gridCombo->setMinimumWidth(165);
+    m_gridCombo->addItem("Canva / Cuaderno Blanco (5mm)", static_cast<int>(BackgroundType::CanvaGrid));
+    m_gridCombo->addItem("Cuadrícula Cálculo (Tokyo)", static_cast<int>(BackgroundType::CalculusGrid));
+    m_gridCombo->addItem("Sepia Cálido (Papel Crema)", static_cast<int>(BackgroundType::WarmSepia));
+    m_gridCombo->addItem("Pizarra Verde (Chalkboard)", static_cast<int>(BackgroundType::ChalkboardGreen));
     m_gridCombo->addItem("Papel Milimétrico", static_cast<int>(BackgroundType::EngineeringMillimeter));
     m_gridCombo->addItem("Malla Isométrica 3D", static_cast<int>(BackgroundType::Isometric));
     m_gridCombo->addItem("Punteado (Dotted)", static_cast<int>(BackgroundType::Dotted));
-    m_gridCombo->addItem("Blanco / Liso", static_cast<int>(BackgroundType::Blank));
+    m_gridCombo->addItem("Liso Blanco", static_cast<int>(BackgroundType::BlankLight));
+    m_gridCombo->addItem("Liso Oscuro", static_cast<int>(BackgroundType::Blank));
+    m_gridCombo->setCurrentIndex(0);
     connect(m_gridCombo, &QComboBox::currentIndexChanged, this, &MainWindow::onGridTypeChanged);
     styleBar->addWidget(m_gridCombo);
 
@@ -538,7 +545,31 @@ void MainWindow::onShapeTypeChanged(int /* index */) {
 void MainWindow::onGridTypeChanged(int index) {
     if (!m_currentScene) return;
     auto bgType = static_cast<BackgroundType>(m_gridCombo->itemData(index).toInt());
+    bool wasLight = m_currentScene->isLightBackground();
     m_currentScene->setBackgroundType(bgType);
+    bool isNowLight = m_currentScene->isLightBackground();
+
+    if (m_colorPalette) {
+        m_colorPalette->setLightMode(isNowLight);
+    }
+
+    if (wasLight != isNowLight) {
+        if (isNowLight) {
+            // Switched to Light background: if ink was white or near-white, adapt to Canva Navy (#002b80)
+            if (m_currentScene->currentColor() == QColor("#ffffff") || m_currentScene->currentColor() == QColor("#c0caf5")) {
+                m_currentScene->setCurrentColor(QColor("#002b80"));
+                if (m_colorPalette) m_colorPalette->setCurrentColor(QColor("#002b80"));
+                if (m_widthControl) m_widthControl->setColor(QColor("#002b80"));
+            }
+        } else {
+            // Switched to Dark background: if ink was dark (#002b80 or #111827), adapt to White (#ffffff)
+            if (m_currentScene->currentColor() == QColor("#002b80") || m_currentScene->currentColor() == QColor("#111827")) {
+                m_currentScene->setCurrentColor(QColor("#ffffff"));
+                if (m_colorPalette) m_colorPalette->setCurrentColor(QColor("#ffffff"));
+                if (m_widthControl) m_widthControl->setColor(QColor("#ffffff"));
+            }
+        }
+    }
 
     if (m_currentPageId > 0) {
         m_storage.updatePageBackground(m_currentPageId, static_cast<int>(bgType));
@@ -1044,6 +1075,10 @@ void MainWindow::switchPage(qint64 pageId) {
                 int idx = m_gridCombo->findData(p.backgroundType);
                 if (idx >= 0) m_gridCombo->setCurrentIndex(idx);
 
+                if (m_colorPalette) {
+                    m_colorPalette->setLightMode(m_currentScene->isLightBackground());
+                }
+
                 if (p.pdfPage >= 0 && !p.pdfPath.isEmpty()) {
                     if (m_pdfManager.filePath() != p.pdfPath) {
                         m_pdfManager.loadDocument(p.pdfPath);
@@ -1163,7 +1198,7 @@ void MainWindow::ensureActivePageForSave() {
 
     auto pages = m_storage.getPages(m_currentNotebookId);
     if (pages.isEmpty()) {
-        int bgType = static_cast<int>(m_currentScene ? m_currentScene->backgroundType() : BackgroundType::CalculusGrid);
+        int bgType = static_cast<int>(m_currentScene ? m_currentScene->backgroundType() : BackgroundType::CanvaGrid);
         m_currentPageId = m_storage.addPage(m_currentNotebookId, 1, 1240.0, 1754.0, bgType);
         QSignalBlocker blocker(m_pageList);
         m_pageList->clear();
@@ -1648,7 +1683,7 @@ void MainWindow::onAddPage() {
     }
 
     int newNum = m_pageList->count() + 1;
-    int bgType = static_cast<int>(m_currentScene ? m_currentScene->backgroundType() : BackgroundType::CalculusGrid);
+    int bgType = static_cast<int>(m_currentScene ? m_currentScene->backgroundType() : BackgroundType::CanvaGrid);
     qint64 newPageId = m_storage.addPage(m_currentNotebookId, newNum, 1240.0, 1754.0, bgType);
     if (newPageId > 0) {
         QSignalBlocker blocker(m_pageList);

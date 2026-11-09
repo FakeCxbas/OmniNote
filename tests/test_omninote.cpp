@@ -1096,6 +1096,65 @@ void testCanvasSelectionAndGrouping() {
     std::cout << "  ✓ Element selection, group-aware lasso, moving, undo/redo, duplication & serialization passed!" << std::endl;
 }
 
+void testCanvaTemplateAndMultiThemePalettes() {
+    std::cout << "[TEST] 20. Canva School Template, Multi-Theme Palettes & Fluid Tablet Dynamics..." << std::endl;
+
+    // 1. Canva School Grid verification
+    VectorCanvasScene scene(1240, 1754);
+    scene.setBackgroundType(BackgroundType::CanvaGrid);
+    assert(scene.isLightBackground() == true);
+    assert(scene.sheetColor() == QColor("#ffffff"));
+    assert(scene.deskColor() == QColor("#ebedf2"));
+    assert(scene.borderColor() == QColor("#d0d7de"));
+
+    // 2. Warm Sepia verification
+    scene.setBackgroundType(BackgroundType::WarmSepia);
+    assert(scene.isLightBackground() == true);
+    assert(scene.sheetColor() == QColor("#fbf8f1"));
+    assert(scene.deskColor() == QColor("#ebe4d8"));
+
+    // 3. Chalkboard Green verification
+    scene.setBackgroundType(BackgroundType::ChalkboardGreen);
+    assert(scene.isLightBackground() == false);
+    assert(scene.sheetColor() == QColor("#182920"));
+    assert(scene.deskColor() == QColor("#0d1712"));
+
+    // 4. ColorPaletteControl dynamic light mode
+    ColorPaletteControl palette;
+    palette.setLightMode(true);
+    assert(palette.isLightMode() == true);
+
+    palette.setLightMode(false);
+    assert(palette.isLightMode() == false);
+
+    // 5. Stylus stroke with sub-pixel coordinates and natural tapering
+    scene.setBackgroundType(BackgroundType::CanvaGrid);
+    scene.setCurrentColor(QColor("#002b80")); // Canva deep navy blue
+    scene.handlePointerPress(QPointF(100.25, 200.75), 0.5, 0.0, 0.0, false);
+    for (int i = 1; i <= 10; ++i) {
+        scene.handlePointerMove(QPointF(100.25 + i * 15.125, 200.75 + std::sin(i) * 3.5), 0.5, 0.0, 0.0, false);
+    }
+    scene.handlePointerRelease(QPointF(251.5, 200.75), 0.5, 0.0, 0.0, false);
+
+    assert(scene.items().size() == 1);
+    auto *stroke = dynamic_cast<StrokeItem *>(scene.items().first());
+    assert(stroke != nullptr);
+    assert(stroke->color() == QColor("#002b80"));
+    assert(!stroke->ribbonPolygon().isEmpty());
+
+    // 6. Offscreen rasterization test to verify Canva grid header divider and crisp rendering
+    QImage renderTarget(800, 1132, QImage::Format_ARGB32_Premultiplied);
+    renderTarget.fill(QColor("#ebedf2"));
+    QPainter painter(&renderTarget);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    scene.render(&painter, QRectF(0, 0, 800, 1132), QRectF(0, 0, 1240, 1754));
+    painter.end();
+    assert(!renderTarget.isNull());
+    renderTarget.save("/home/fakecxbas/.gemini/antigravity/brain/cd378ad1-72ef-4f57-ad6a-e9e23ecc1374/canva_sheet_preview.png");
+
+    std::cout << "  ✓ Canva school template, multi-theme palettes & fluid tablet dynamics verified!" << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     // Initialize QApplication with headless / offscreen support for scene/raster operations
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1124,6 +1183,7 @@ int main(int argc, char *argv[]) {
     testGoogleDriveSyncService();
     testTextBlockSelectionAndLasso();
     testCanvasSelectionAndGrouping();
+    testCanvaTemplateAndMultiThemePalettes();
 
     // Render visual inspection artifact of all toolbar icons
     {
@@ -1232,6 +1292,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "\n>>> ALL 19 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
+    std::cout << "\n>>> ALL 20 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
     return 0;
 }
