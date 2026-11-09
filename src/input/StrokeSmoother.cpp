@@ -30,14 +30,14 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
     // Canva-style adaptive alpha: responsive near-zero latency while eliminating digitizer jitter
     qreal adaptiveAlpha = m_alpha;
     if (dist < 3.0) {
-        adaptiveAlpha = qBound(0.68, m_alpha * (0.85 + 0.15 * (dist / 3.0)), 0.82);
+        adaptiveAlpha = qBound(0.62, m_alpha * (0.75 + 0.25 * (dist / 3.0)), 0.80);
     } else if (dist > 8.0) {
         adaptiveAlpha = qMin(0.96, m_alpha + 0.12);
     }
 
     m_filteredPos.setX(m_filteredPos.x() + adaptiveAlpha * (rawPoint.pos.x() - m_filteredPos.x()));
     m_filteredPos.setY(m_filteredPos.y() + adaptiveAlpha * (rawPoint.pos.y() - m_filteredPos.y()));
-    m_filteredPressure += adaptiveAlpha * (rawPoint.pressure - m_filteredPressure);
+    m_filteredPressure += qBound(0.40, adaptiveAlpha * 0.70, 0.65) * (rawPoint.pressure - m_filteredPressure);
 
     return StrokePoint(m_filteredPos, m_filteredPressure, rawPoint.tiltX, rawPoint.tiltY, rawPoint.timestamp);
 }
@@ -532,13 +532,13 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
     }
 
     // Step 2: Scale-adaptive RDP simplification (subpixel contour clean-up without decimating curves)
-    qreal epsilon = 0.32;
+    qreal epsilon = 0.28;
     if (diag < 25.0 || arcLength < 35.0) {
-        epsilon = qBound(0.12, diag * 0.010, 0.22);
+        epsilon = qBound(0.10, diag * 0.008, 0.18);
     } else if (diag < 60.0) {
-        epsilon = qBound(0.18, diag * 0.008, 0.28);
+        epsilon = qBound(0.15, diag * 0.006, 0.24);
     } else {
-        epsilon = qBound(0.24, diag * 0.005, 0.36);
+        epsilon = qBound(0.20, diag * 0.004, 0.32);
     }
 
     QVector<StrokePoint> simplified = simplifyRDP(pts, epsilon);
@@ -551,19 +551,43 @@ QVector<StrokePoint> StrokeSmoother::beautifyStroke(const QVector<StrokePoint> &
     // Step 3: Salient Corner Detection (preserve sharp corners like in '4', '7', 'z', and square roots)
     QVector<bool> isCorner = detectCorners(simplified);
 
-    // Step 4: Corner-preserving gentle binomial filter (2 passes for smooth, elegant curve flow)
-    const qreal sideWeight = (diag < 30.0 || arcLength < 40.0) ? 0.15 : 0.20;
-    const qreal centerWeight = 1.0 - 2.0 * sideWeight;
+    // Step 3b: Liftoff flick suppression (dampens the tiny involuntary hook caused by stylus release)
+    if (m >= 4 && arcLength > 10.0) {
+        const qreal lastSegLen = std::hypot(simplified[m - 1].pos.x() - simplified[m - 2].pos.x(),
+                                            simplified[m - 1].pos.y() - simplified[m - 2].pos.y());
+        const qreal prevSegLen = std::hypot(simplified[m - 2].pos.x() - simplified[m - 3].pos.x(),
+                                            simplified[m - 2].pos.y() - simplified[m - 3].pos.y());
+        if (lastSegLen < 5.0 && prevSegLen > 0.5 && simplified[m - 1].pressure < 0.25) {
+            QPointF prevDir = (simplified[m - 2].pos - simplified[m - 3].pos) / prevSegLen;
+            QPointF lastDir = (simplified[m - 1].pos - simplified[m - 2].pos) / lastSegLen;
+            qreal dot = prevDir.x() * lastDir.x() + prevDir.y() * lastDir.y();
+            if (dot < 0.30) {
+                simplified[m - 1].pos = simplified[m - 2].pos + prevDir * (lastSegLen * 0.65);
+            }
+        }
+    }
 
+    // Step 4: Corner-preserving gentle binomial filter (2 passes for smooth, elegant curve flow)
+    // Combines 5-point binomial kernel [1, 4, 6, 4, 1] / 16 for high-precision tremor elimination
+    // with 3-point Gaussian transitions near ends and corners.
     QVector<StrokePoint> cur = simplified;
     for (int pass = 0; pass < 2; ++pass) {
         QVector<StrokePoint> next = cur;
         for (int i = 1; i < m - 1; ++i) {
             if (isCorner[i]) {
                 next[i] = cur[i];
+                continue;
+            }
+
+            bool nearCorner = (i > 0 && isCorner[i - 1]) || (i < m - 1 && isCorner[i + 1]);
+            if (i >= 2 && i <= m - 3 && !nearCorner && !isCorner[i - 2] && !isCorner[i + 2]) {
+                // 5-point binomial kernel [1, 4, 6, 4, 1] / 16 (ideal Gaussian spatial low-pass filter)
+                next[i].pos = (1.0 * cur[i - 2].pos + 4.0 * cur[i - 1].pos + 6.0 * cur[i].pos + 4.0 * cur[i + 1].pos + 1.0 * cur[i + 2].pos) / 16.0;
+                next[i].pressure = (1.0 * cur[i - 2].pressure + 4.0 * cur[i - 1].pressure + 6.0 * cur[i].pressure + 4.0 * cur[i + 1].pressure + 1.0 * cur[i + 2].pressure) / 16.0;
             } else {
-                next[i].pos = sideWeight * cur[i - 1].pos + centerWeight * cur[i].pos + sideWeight * cur[i + 1].pos;
-                next[i].pressure = sideWeight * cur[i - 1].pressure + centerWeight * cur[i].pressure + sideWeight * cur[i + 1].pressure;
+                // 3-point Gaussian kernel [0.20, 0.60, 0.20] for boundary and near-corner transitions
+                next[i].pos = 0.20 * cur[i - 1].pos + 0.60 * cur[i].pos + 0.20 * cur[i + 1].pos;
+                next[i].pressure = 0.20 * cur[i - 1].pressure + 0.60 * cur[i].pressure + 0.20 * cur[i + 1].pressure;
             }
         }
         cur = next;
