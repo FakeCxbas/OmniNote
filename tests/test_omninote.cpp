@@ -1154,6 +1154,16 @@ void testCanvaTemplateAndMultiThemePalettes() {
     assert(!renderTarget.isNull());
     renderTarget.save("/home/fakecxbas/.gemini/antigravity/brain/cd378ad1-72ef-4f57-ad6a-e9e23ecc1374/canva_sheet_preview.png");
 
+    // 7. Verify rasterization contains prominent white sheet surface
+    int whitePixels = 0;
+    for (int y = 0; y < 1132; ++y) {
+        for (int x = 0; x < 800; ++x) {
+            QRgb c = renderTarget.pixel(x, y);
+            if (qRed(c) > 240 && qGreen(c) > 240 && qBlue(c) > 240) whitePixels++;
+        }
+    }
+    assert(whitePixels > 50000); // White paper sheet must be visible and rendered!
+
     std::cout << "  ✓ Canva school template, multi-theme palettes & fluid tablet dynamics verified!" << std::endl;
 }
 
