@@ -43,7 +43,7 @@ public:
     static QVector<StrokePoint> stabilizePoints(const QVector<StrokePoint> &points, int passes = 1);
 
     // Salient corner detection (preserves sharp math vertices like in '4', '7', 'Z', and square roots)
-    static QVector<bool> detectCorners(const QVector<StrokePoint> &points, qreal targetSpan = 6.0, qreal minTurnCos = 0.65);
+    static QVector<bool> detectCorners(const QVector<StrokePoint> &points, qreal targetSpan = 8.0, qreal minTurnCos = 0.40);
 
     // Stroke Beautification & Tremor Elimination (Canva-style Auto-Improvement)
     static QVector<StrokePoint> beautifyStroke(const QVector<StrokePoint> &points, bool detectShapes = true);
