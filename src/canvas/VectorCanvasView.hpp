@@ -40,6 +40,7 @@ signals:
     void pressureChanged(qreal pressure);
     void eraserModeChanged(bool isEraser);
     void pasteRequested();
+    void imageDropped(const QImage &image, const QPointF &scenePos);
 
 protected:
     bool viewportEvent(QEvent *event) override;
@@ -50,6 +51,9 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void tabletEvent(QTabletEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
     void drawBackground(QPainter *painter, const QRectF &rect) override;

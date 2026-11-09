@@ -771,7 +771,39 @@ void testImageBlockItemAndSerialization() {
     assert(restored.image().width() == 200);
     assert(restored.image().height() == 150);
 
-    std::cout << "  ✓ ImageBlockItem aspect scaling, handle hit-testing & base64 persistence passed!" << std::endl;
+    // 5. Test Canva-style background remover
+    QImage mathSnippet(100, 100, QImage::Format_RGB32);
+    mathSnippet.fill(QColor("#ffffff")); // Solid white background
+    // Draw black text pixel in center
+    mathSnippet.setPixelColor(50, 50, QColor("#111827"));
+
+    ImageBlockItem mathItem(mathSnippet, QPointF(200, 200));
+    assert(!mathItem.isBackgroundRemoved());
+    assert(mathItem.isControlHit(QPointF(10, 10))); // Magic button hit test
+
+    mathItem.toggleBackgroundRemoval();
+    assert(mathItem.isBackgroundRemoved());
+    // Corner should now be transparent
+    QImage transparentImg = mathItem.image();
+    assert(transparentImg.pixelColor(0, 0).alpha() == 0);
+    // Dark math text should remain opaque
+    assert(transparentImg.pixelColor(50, 50).alpha() > 200);
+
+    // Serialization with background removed
+    QString mathJson = mathItem.serialize();
+    assert(mathJson.contains("\"backgroundRemoved\":true"));
+
+    ImageBlockItem mathRestored;
+    mathRestored.deserialize(mathJson);
+    assert(mathRestored.isBackgroundRemoved());
+    assert(mathRestored.image().pixelColor(0, 0).alpha() == 0);
+
+    // Toggle back to restore original background
+    mathRestored.toggleBackgroundRemoval();
+    assert(!mathRestored.isBackgroundRemoved());
+    assert(mathRestored.image().pixelColor(0, 0).alpha() == 255);
+
+    std::cout << "  ✓ ImageBlockItem aspect scaling, handle hit-testing, Canva background remover & base64 persistence passed!" << std::endl;
 }
 
 void testVirtualRulerItemAndSnapping() {

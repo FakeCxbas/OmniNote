@@ -9,7 +9,7 @@
 namespace OmniNote {
 
 ImageBlockItem::ImageBlockItem(const QImage &image, const QPointF &pos, QGraphicsItem *parent)
-    : QGraphicsObject(parent), m_image(image) {
+    : QGraphicsObject(parent), m_originalImage(image), m_image(image) {
     setPos(pos);
     setZValue(-5.0); // Rendered above page background (-20), below pen strokes (+10)
     setFlags(ItemIsSelectable | ItemSendsGeometryChanges);
@@ -33,7 +33,9 @@ ImageBlockItem::ImageBlockItem(const QImage &image, const QPointF &pos, QGraphic
 
 void ImageBlockItem::setImage(const QImage &image) {
     prepareGeometryChange();
+    m_originalImage = image;
     m_image = image;
+    m_backgroundRemoved = false;
     if (!m_image.isNull()) {
         qreal w = m_image.width();
         qreal h = m_image.height();
@@ -58,6 +60,105 @@ void ImageBlockItem::setSize(qreal w, qreal h) {
     emit blockModified();
 }
 
+void ImageBlockItem::toggleBackgroundRemoval() {
+    setBackgroundRemoved(!m_backgroundRemoved);
+}
+
+void ImageBlockItem::setBackgroundRemoved(bool removed) {
+    if (m_originalImage.isNull() && !m_image.isNull()) {
+        m_originalImage = m_image;
+    }
+    if (m_originalImage.isNull()) return;
+
+    m_backgroundRemoved = removed;
+    if (m_backgroundRemoved) {
+        m_image = processRemoveBackground(m_originalImage);
+    } else {
+        m_image = m_originalImage;
+    }
+    updatePixmap();
+    update();
+    emit blockModified();
+}
+
+QImage ImageBlockItem::processRemoveBackground(const QImage &source, qreal tolerance, qreal feather) {
+    if (source.isNull()) return source;
+
+    QImage img = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = img.width();
+    const int h = img.height();
+    if (w <= 0 || h <= 0) return source;
+
+    // Sample background color around edges and corners
+    const QVector<QPoint> samplePoints = {
+        QPoint(0, 0), QPoint(w - 1, 0), QPoint(0, h - 1), QPoint(w - 1, h - 1),
+        QPoint(w / 2, 0), QPoint(0, h / 2), QPoint(w - 1, h / 2), QPoint(w / 2, h - 1),
+        QPoint(qMin(4, w - 1), qMin(4, h - 1)), QPoint(qMax(0, w - 5), qMin(4, h - 1))
+    };
+
+    qreal bgR = 0, bgG = 0, bgB = 0;
+    int validSamples = 0;
+    for (const QPoint &pt : samplePoints) {
+        QRgb pixel = img.pixel(pt);
+        if (qAlpha(pixel) > 10) {
+            bgR += qRed(pixel);
+            bgG += qGreen(pixel);
+            bgB += qBlue(pixel);
+            validSamples++;
+        }
+    }
+
+    if (validSamples > 0) {
+        bgR /= validSamples;
+        bgG /= validSamples;
+        bgB /= validSamples;
+    } else {
+        bgR = 255.0; bgG = 255.0; bgB = 255.0;
+    }
+
+    const qreal tolDist = tolerance * 255.0;
+    const qreal featherDist = feather * 255.0;
+
+    for (int y = 0; y < h; ++y) {
+        auto *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            QRgb p = line[x];
+            int a = qAlpha(p);
+            if (a == 0) continue;
+
+            int r = qRed(p);
+            int g = qGreen(p);
+            int b = qBlue(p);
+
+            // Perceptually weighted color distance to background
+            qreal dr = r - bgR;
+            qreal dg = g - bgG;
+            qreal db = b - bgB;
+            qreal dist = std::sqrt(0.299 * dr * dr + 0.587 * dg * dg + 0.114 * db * db);
+
+            if (dist <= tolDist) {
+                line[x] = qRgba(r, g, b, 0);
+            } else if (dist < tolDist + featherDist && featherDist > 0.0) {
+                qreal factor = (dist - tolDist) / featherDist;
+                int newAlpha = qBound(0, static_cast<int>(std::round(a * factor)), 255);
+
+                // Anti-fringe defringing: eliminate background tint from semi-transparent edge pixels
+                if (newAlpha > 0) {
+                    qreal alphaNorm = newAlpha / 255.0;
+                    int defringedR = qBound(0, static_cast<int>(std::round((r - bgR * (1.0 - alphaNorm)) / alphaNorm)), 255);
+                    int defringedG = qBound(0, static_cast<int>(std::round((g - bgG * (1.0 - alphaNorm)) / alphaNorm)), 255);
+                    int defringedB = qBound(0, static_cast<int>(std::round((b - bgB * (1.0 - alphaNorm)) / alphaNorm)), 255);
+                    line[x] = qRgba(defringedR, defringedG, defringedB, newAlpha);
+                } else {
+                    line[x] = qRgba(r, g, b, 0);
+                }
+            }
+        }
+    }
+
+    return img;
+}
+
 void ImageBlockItem::updatePixmap() {
     if (!m_image.isNull()) {
         m_cachedPixmap = QPixmap::fromImage(m_image.scaled(m_rect.size().toSize(),
@@ -75,6 +176,11 @@ QRectF ImageBlockItem::boundingRect() const {
 
 QRectF ImageBlockItem::closeButtonRect() const {
     return QRectF(m_rect.right() - 24.0, m_rect.top() + 4.0, 20.0, 20.0);
+}
+
+QRectF ImageBlockItem::magicButtonRect() const {
+    const qreal btnW = m_backgroundRemoved ? 94.0 : 106.0;
+    return QRectF(m_rect.left() + 6.0, m_rect.top() + 6.0, btnW, 22.0);
 }
 
 ImageBlockItem::ResizeHandle ImageBlockItem::hitTestHandle(const QPointF &pos) const {
@@ -139,7 +245,20 @@ void ImageBlockItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
         drawHandle(m_rect.bottomRight(), m_hoverResizeHandle == BottomRight);
         drawHandle(m_rect.bottomLeft(), m_hoverResizeHandle == BottomLeft);
 
-        // 5. Close Button (✕)
+        // 5. Magic Background Remover Pill ("✦ Quitar Fondo" / "↺ Con Fondo")
+        QRectF mb = magicButtonRect();
+        painter->setPen(QPen(m_backgroundRemoved ? QColor("#7dcfff") : QColor("#7aa2f7"), 1.2));
+        painter->setBrush(QColor(22, 24, 34, 235));
+        painter->drawRoundedRect(mb, 5.0, 5.0);
+
+        QFont btnFont("Inter", 8, QFont::DemiBold);
+        btnFont.setStyleHint(QFont::SansSerif);
+        painter->setFont(btnFont);
+        painter->setPen(m_backgroundRemoved ? QColor("#7dcfff") : QColor("#c0caf5"));
+        QString btnText = m_backgroundRemoved ? "↺ Con Fondo" : "✦ Quitar Fondo";
+        painter->drawText(mb, Qt::AlignCenter, btnText);
+
+        // 6. Close Button (✕)
         QRectF cb = closeButtonRect();
         bool cbHover = cb.contains(m_dragStartMousePos); // or hover pos
         painter->setPen(Qt::NoPen);
@@ -173,7 +292,7 @@ void ImageBlockItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
         setCursor(Qt::SizeFDiagCursor);
     } else if (h == TopRight || h == BottomLeft) {
         setCursor(Qt::SizeBDiagCursor);
-    } else if (closeButtonRect().contains(pos)) {
+    } else if (closeButtonRect().contains(pos) || magicButtonRect().contains(pos)) {
         setCursor(Qt::PointingHandCursor);
     } else {
         setCursor(Qt::SizeAllCursor);
@@ -184,6 +303,13 @@ void ImageBlockItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
 void ImageBlockItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         QPointF pos = event->pos();
+
+        // Check magic background button
+        if (magicButtonRect().contains(pos)) {
+            toggleBackgroundRemoval();
+            event->accept();
+            return;
+        }
 
         // Check close button
         if (closeButtonRect().contains(pos)) {
@@ -290,12 +416,15 @@ QString ImageBlockItem::serialize() const {
     root["y"] = pos().y();
     root["width"] = m_rect.width();
     root["height"] = m_rect.height();
+    root["backgroundRemoved"] = m_backgroundRemoved;
 
-    if (!m_image.isNull()) {
+    // Save the original full-fidelity image so background removal can always be undone
+    QImage toSave = m_originalImage.isNull() ? m_image : m_originalImage;
+    if (!toSave.isNull()) {
         QByteArray ba;
         QBuffer buffer(&ba);
         buffer.open(QIODevice::WriteOnly);
-        m_image.save(&buffer, "PNG");
+        toSave.save(&buffer, "PNG");
         root["imageData"] = QString::fromLatin1(ba.toBase64());
     }
 
@@ -311,6 +440,7 @@ void ImageBlockItem::deserialize(const QString &data) {
     qreal y = root["y"].toDouble(pos().y());
     qreal w = root["width"].toDouble(300.0);
     qreal h = root["height"].toDouble(200.0);
+    m_backgroundRemoved = root["backgroundRemoved"].toBool(false);
 
     setPos(x, y);
 
@@ -318,7 +448,12 @@ void ImageBlockItem::deserialize(const QString &data) {
         QByteArray ba = QByteArray::fromBase64(root["imageData"].toString().toLatin1());
         QImage img;
         img.loadFromData(ba, "PNG");
-        m_image = img;
+        m_originalImage = img;
+        if (m_backgroundRemoved && !m_originalImage.isNull()) {
+            m_image = processRemoveBackground(m_originalImage);
+        } else {
+            m_image = img;
+        }
     }
 
     prepareGeometryChange();
