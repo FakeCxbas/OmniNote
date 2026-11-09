@@ -136,8 +136,25 @@ VectorCanvasView::VectorCanvasView(VectorCanvasScene *scene, QWidget *parent)
 }
 
 void VectorCanvasView::enterEvent(QEnterEvent *event) {
+    if (!(QGuiApplication::mouseButtons() & (Qt::LeftButton | Qt::MiddleButton))) {
+        m_isPanning = false;
+    }
     updateToolCursor();
     QGraphicsView::enterEvent(event);
+}
+
+void VectorCanvasView::resetInteractionState() {
+    m_spacePressed = false;
+    m_isPanning = false;
+    m_isTabletStroke = false;
+    m_interactingWithWidget = false;
+    m_stylusEraserActive = false;
+    m_stylusLassoActive = false;
+    if (m_canvasScene) {
+        m_canvasScene->handlePointerRelease(m_lastMousePos, 0.0, 0.0, 0.0, false);
+    }
+    updateToolCursor();
+    viewport()->update();
 }
 
 void VectorCanvasView::updateToolCursor() {
@@ -305,6 +322,10 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
     bool isStylus = (dev && (dev->pointerType() == QPointingDevice::PointerType::Pen ||
                              dev->pointerType() == QPointingDevice::PointerType::Eraser ||
                              dev->type() == QInputDevice::DeviceType::Stylus));
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_lastTabletTimeMs < 500) {
+        isStylus = true;
+    }
 
     // Panning: Middle mouse button (if regular mouse) or Space + Left button
     if ((!isStylus && event->button() == Qt::MiddleButton) ||
@@ -333,7 +354,6 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
         event->accept();
         return;
     }
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
 
     m_lastMousePos = scenePos;
     m_lastMouseTimeMs = now;
@@ -394,12 +414,24 @@ void VectorCanvasView::mouseDoubleClickEvent(QMouseEvent *event) {
 
 void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
     if (m_isPanning) {
-        QPoint delta = event->pos() - m_panStartPos;
-        horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
-        verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
-        m_panStartPos = event->pos();
-        event->accept();
-        return;
+        // Critical hover guard: panning REQUIRES an active mouse/stylus button press.
+        // If no drag button is held, immediately terminate panning to prevent hover ghost-panning.
+        if (!(event->buttons() & (Qt::LeftButton | Qt::MiddleButton))) {
+            m_isPanning = false;
+            if (m_spacePressed) {
+                viewport()->setCursor(Qt::OpenHandCursor);
+                setCursor(Qt::OpenHandCursor);
+            } else {
+                updateToolCursor();
+            }
+        } else {
+            QPoint delta = event->pos() - m_panStartPos;
+            horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
+            verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
+            m_panStartPos = event->pos();
+            event->accept();
+            return;
+        }
     }
 
     if (m_interactingWithWidget) {
@@ -486,7 +518,7 @@ void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
-    if (m_isPanning && (event->button() == Qt::MiddleButton || (event->button() == Qt::LeftButton && m_spacePressed))) {
+    if (m_isPanning) {
         m_isPanning = false;
         if (m_spacePressed) {
             viewport()->setCursor(Qt::OpenHandCursor);
@@ -598,6 +630,14 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
 
     switch (event->type()) {
     case QEvent::TabletPress:
+        if (m_spacePressed) {
+            m_isPanning = true;
+            m_panStartPos = event->position().toPoint();
+            viewport()->setCursor(Qt::ClosedHandCursor);
+            setCursor(Qt::ClosedHandCursor);
+            event->accept();
+            return;
+        }
         if (shouldForwardToSceneWidgets(scenePos)) {
             event->ignore(); // Let Qt synthesize widget click for UI controls
             return;
@@ -610,6 +650,25 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
         break;
 
     case QEvent::TabletMove:
+        if (m_isPanning) {
+            if (event->pressure() <= 0.01 && !(event->buttons() & (Qt::LeftButton | Qt::MiddleButton))) {
+                m_isPanning = false;
+                if (m_spacePressed) {
+                    viewport()->setCursor(Qt::OpenHandCursor);
+                    setCursor(Qt::OpenHandCursor);
+                } else {
+                    updateToolCursor();
+                }
+            } else {
+                QPoint cur = event->position().toPoint();
+                QPoint delta = cur - m_panStartPos;
+                horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
+                verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
+                m_panStartPos = cur;
+                event->accept();
+                return;
+            }
+        }
         if (m_isTabletStroke) {
             m_lastTabletTimeMs = QDateTime::currentMSecsSinceEpoch();
             emit pressureChanged(pressure);
@@ -622,6 +681,17 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
         break;
 
     case QEvent::TabletRelease:
+        if (m_isPanning) {
+            m_isPanning = false;
+            if (m_spacePressed) {
+                viewport()->setCursor(Qt::OpenHandCursor);
+                setCursor(Qt::OpenHandCursor);
+            } else {
+                updateToolCursor();
+            }
+            event->accept();
+            return;
+        }
         if (m_isTabletStroke) {
             m_isTabletStroke = false;
             m_lastTabletTimeMs = QDateTime::currentMSecsSinceEpoch();
@@ -664,11 +734,23 @@ void VectorCanvasView::keyPressEvent(QKeyEvent *event) {
 void VectorCanvasView::keyReleaseEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Space && !event->isAutoRepeat()) {
         m_spacePressed = false;
+        m_isPanning = false;
         updateToolCursor();
         event->accept();
         return;
     }
     QGraphicsView::keyReleaseEvent(event);
+}
+
+void VectorCanvasView::focusInEvent(QFocusEvent *event) {
+    m_isTabletStroke = false;
+    m_isPanning = false;
+    m_spacePressed = false;
+    m_interactingWithWidget = false;
+    m_stylusEraserActive = false;
+    m_stylusLassoActive = false;
+    updateToolCursor();
+    QGraphicsView::focusInEvent(event);
 }
 
 void VectorCanvasView::scrollContentsBy(int dx, int dy) {

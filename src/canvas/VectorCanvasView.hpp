@@ -28,6 +28,7 @@ public slots:
     void fitToWidth();
     void setZoomFactor(qreal factor);
     void updateToolCursor();
+    void resetInteractionState();
     void showLatexEditor(class FormulaBlockItem *item = nullptr);
     QPointF mapToSceneF(const QPointF &pos) const {
         return viewportTransform().inverted().map(pos);
@@ -55,6 +56,7 @@ protected:
     void scrollContentsBy(int dx, int dy) override;
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;
+    void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
     void hideEvent(QHideEvent *event) override;
 
