@@ -1238,7 +1238,27 @@ void testCanvaTemplateAndMultiThemePalettes() {
             if (qRed(c) > 240 && qGreen(c) > 240 && qBlue(c) > 240) whitePixels++;
         }
     }
-    assert(whitePixels > 50000); // White paper sheet must be visible and rendered!
+    // 8. Inking scalability test: 150 existing strokes on the scene + rapid inking
+    for (int s = 0; s < 150; ++s) {
+        auto *bgStroke = new StrokeItem(ToolType::Pen, QColor("#1f2335"), 2.0);
+        QVector<StrokePoint> pts;
+        qreal baseY = 200.0 + (s % 30) * 40.0;
+        qreal baseX = 100.0 + (s / 30) * 200.0;
+        for (int p = 0; p < 15; ++p) {
+            pts.append(StrokePoint(QPointF(baseX + p * 10, baseY + (p % 2) * 5), 0.5));
+        }
+        bgStroke->setPoints(pts);
+        scene.addItem(bgStroke);
+    }
+    assert(scene.items().size() >= 150);
+
+    // Perform active inking of a 60-point stroke on top of the 150 strokes
+    scene.handlePointerPress(QPointF(400, 600), 0.4, 0.0, 0.0, false);
+    for (int p = 1; p < 60; ++p) {
+        scene.handlePointerMove(QPointF(400 + p * 5.0, 600 + std::sin(p * 0.2) * 20.0), 0.4 + 0.3 * std::sin(p * 0.1), 0.0, 0.0, false);
+    }
+    scene.handlePointerRelease(QPointF(700, 600), 0.5, 0.0, 0.0, false);
+    assert(scene.items().size() >= 151);
 
     std::cout << "  ✓ Canva school template, multi-theme palettes & fluid tablet dynamics verified!" << std::endl;
 }

@@ -71,6 +71,11 @@ public:
 private:
     void rebuildGeometry();
 
+    struct CachedSpan {
+        QPainterPath path;
+        qreal width{1.0};
+    };
+
     ToolType m_toolType;
     QColor m_color;
     qreal m_baseWidth;
@@ -81,6 +86,11 @@ private:
     QRectF m_boundingRect;
     bool m_autoImprove{true};
     qint64 m_groupId{0};
+
+    QVector<CachedSpan> m_cachedSpans;
+    QPainterPath m_cachedSinglePath;
+    qreal m_cachedSingleWidth{0.0};
+    QPolygonF m_cachedHighlighterPoly;
 };
 
 } // namespace OmniNote

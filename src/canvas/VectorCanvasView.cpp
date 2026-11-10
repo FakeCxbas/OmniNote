@@ -28,7 +28,7 @@ VectorCanvasView::VectorCanvasView(VectorCanvasScene *scene, QWidget *parent)
 
     // 2. High-Quality Vector Render Hints
     setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform | QPainter::TextAntialiasing);
-    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    setViewportUpdateMode(QGraphicsView::SmartViewportUpdate);
     setOptimizationFlags(QGraphicsView::DontAdjustForAntialiasing);
 
     // 3. Coordinate Anchoring & Scrollbars

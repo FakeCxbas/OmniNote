@@ -29,6 +29,7 @@ VectorCanvasScene::VectorCanvasScene(qreal width, qreal height, QObject *parent)
       m_currentColor(QColor("#ffffff")),
       m_currentBaseWidth(3.5) {
     setSceneRect(0, 0, m_pageSize.width(), m_pageSize.height());
+    setItemIndexMethod(QGraphicsScene::NoIndex);
     connect(&m_undoStack, &QUndoStack::cleanChanged, this, [this](bool clean) {
         if (!clean) {
             emit contentModified();

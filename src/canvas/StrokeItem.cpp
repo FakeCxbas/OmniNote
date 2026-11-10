@@ -92,8 +92,12 @@ void StrokeItem::addPointFast(const StrokePoint &pt) {
     } else {
         m_boundingRect = m_boundingRect.united(ptRect);
         if (m_points.size() >= 2) {
-            const QPointF &prevPos = m_points[m_points.size() - 2].pos;
-            dirtyRect = dirtyRect.united(QRectF(prevPos.x() - pad, prevPos.y() - pad, 2.0 * pad, 2.0 * pad));
+            const QPointF &p1 = m_points[m_points.size() - 2].pos;
+            dirtyRect = dirtyRect.united(QRectF(p1.x() - pad, p1.y() - pad, 2.0 * pad, 2.0 * pad));
+        }
+        if (m_points.size() >= 3) {
+            const QPointF &p2 = m_points[m_points.size() - 3].pos;
+            dirtyRect = dirtyRect.united(QRectF(p2.x() - pad, p2.y() - pad, 2.0 * pad, 2.0 * pad));
         }
     }
     update(dirtyRect);
@@ -133,6 +137,10 @@ void StrokeItem::rebuildGeometry() {
     prepareGeometryChange();
     m_shapePath = QPainterPath();
     m_smoothedPoints.clear();
+    m_cachedSpans.clear();
+    m_cachedSinglePath = QPainterPath();
+    m_cachedSingleWidth = 0.0;
+    m_cachedHighlighterPoly.clear();
 
     if (m_points.isEmpty()) {
         m_boundingRect = QRectF();
@@ -161,6 +169,88 @@ void StrokeItem::rebuildGeometry() {
         }
         const qreal pad = m_baseWidth * widthMultiplier * 1.35 + 8.0;
         m_boundingRect = QRectF(minX - pad, minY - pad, (maxX - minX) + 2.0 * pad, (maxY - minY) + 2.0 * pad);
+
+        // Precompute cached paths for lightning-fast zero-allocation painting
+        if (m_toolType == ToolType::Highlighter) {
+            m_cachedHighlighterPoly.reserve(m_smoothedPoints.size());
+            for (const auto &p : m_smoothedPoints) {
+                m_cachedHighlighterPoly << p.pos;
+            }
+        } else if (m_toolType == ToolType::Pen) {
+            const auto &pts = m_smoothedPoints;
+            const int n = pts.size();
+            if (n > 2) {
+                qreal minP = 1.0, maxP = 0.0, sumP = 0.0;
+                for (const auto &p : pts) {
+                    if (p.pressure < minP) minP = p.pressure;
+                    if (p.pressure > maxP) maxP = p.pressure;
+                    sumP += p.pressure;
+                }
+                qreal avgP = sumP / static_cast<qreal>(n);
+
+                qreal totalLength = 0.0;
+                QVector<qreal> cumDist;
+                cumDist.reserve(n);
+                cumDist.append(0.0);
+                for (int i = 0; i < n - 1; ++i) {
+                    totalLength += std::hypot(pts[i + 1].pos.x() - pts[i].pos.x(),
+                                              pts[i + 1].pos.y() - pts[i].pos.y());
+                    cumDist.append(totalLength);
+                }
+                const qreal taperWindow = qMin(8.0, totalLength * 0.20);
+
+                if ((maxP - minP <= 0.10) && (totalLength <= 14.0 || taperWindow <= 0.5)) {
+                    m_cachedSinglePath.moveTo(pts[0].pos);
+                    for (int i = 1; i < n - 1; ++i) {
+                        QPointF mid = (pts[i].pos + pts[i + 1].pos) * 0.5;
+                        m_cachedSinglePath.quadTo(pts[i].pos, mid);
+                    }
+                    m_cachedSinglePath.lineTo(pts.last().pos);
+                    m_cachedSingleWidth = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(avgP));
+                } else {
+                    m_cachedSpans.reserve(n);
+                    QPointF mid0 = (pts[0].pos + pts[1].pos) * 0.5;
+                    qreal p0 = pts[0].pressure;
+                    qreal taper0 = (totalLength > 3.0 && taperWindow > 0.5) ? 0.88 : 1.0;
+                    qreal w0 = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(p0) * taper0);
+
+                    QPainterPath path0;
+                    path0.moveTo(pts[0].pos);
+                    path0.lineTo(mid0);
+                    m_cachedSpans.append({path0, w0});
+
+                    QPointF prevMid = mid0;
+                    for (int i = 1; i < n - 1; ++i) {
+                        QPointF nextMid = (pts[i].pos + pts[i + 1].pos) * 0.5;
+                        qreal segDist = cumDist[i];
+                        qreal taper = 1.0;
+                        if (totalLength > 3.0 && taperWindow > 0.5) {
+                            if (segDist < taperWindow) {
+                                qreal u = segDist / taperWindow;
+                                taper = 0.88 + 0.12 * (3.0 * u * u - 2.0 * u * u * u);
+                            } else if (totalLength - segDist < taperWindow) {
+                                qreal u = (totalLength - segDist) / taperWindow;
+                                taper = 0.88 + 0.12 * (3.0 * u * u - 2.0 * u * u * u);
+                            }
+                        }
+                        qreal segW = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(pts[i].pressure) * taper);
+                        QPainterPath quadSpan;
+                        quadSpan.moveTo(prevMid);
+                        quadSpan.quadTo(pts[i].pos, nextMid);
+                        m_cachedSpans.append({quadSpan, segW});
+                        prevMid = nextMid;
+                    }
+
+                    qreal pn = pts[n - 1].pressure;
+                    qreal tapern = (totalLength > 3.0 && taperWindow > 0.5) ? 0.88 : 1.0;
+                    qreal wn = qMax(0.6, m_baseWidth * fastCanvaPressureFactor(pn) * tapern);
+                    QPainterPath pathN;
+                    pathN.moveTo(prevMid);
+                    pathN.lineTo(pts[n - 1].pos);
+                    m_cachedSpans.append({pathN, wn});
+                }
+            }
+        }
 
     } else if (m_toolType == ToolType::ShapeLine) {
         QPointF p1 = m_points.first().pos;
@@ -205,22 +295,43 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
         painter->setPen(hlPen);
         painter->setBrush(Qt::NoBrush);
 
-        const auto &pts = m_smoothedPoints.isEmpty() ? m_points : m_smoothedPoints;
-        if (pts.size() == 1) {
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(hlColor);
-            qreal r = (m_baseWidth * widthMultiplier) * 0.5;
-            painter->drawEllipse(pts[0].pos, r, r);
+        if (!m_cachedHighlighterPoly.isEmpty()) {
+            painter->drawPolyline(m_cachedHighlighterPoly);
         } else {
-            QPolygonF poly;
-            poly.reserve(pts.size());
-            for (const auto &p : pts) {
-                poly << p.pos;
+            const auto &pts = m_smoothedPoints.isEmpty() ? m_points : m_smoothedPoints;
+            if (pts.size() == 1) {
+                painter->setPen(Qt::NoPen);
+                painter->setBrush(hlColor);
+                qreal r = (m_baseWidth * widthMultiplier) * 0.5;
+                painter->drawEllipse(pts[0].pos, r, r);
+            } else {
+                QPolygonF poly;
+                poly.reserve(pts.size());
+                for (const auto &p : pts) {
+                    poly << p.pos;
+                }
+                painter->drawPolyline(poly);
             }
-            painter->drawPolyline(poly);
         }
         painter->restore();
     } else if (m_toolType == ToolType::Pen) {
+        if (!m_cachedSpans.isEmpty()) {
+            painter->setBrush(Qt::NoBrush);
+            QPen pen(m_color, 1.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            for (const auto &span : m_cachedSpans) {
+                pen.setWidthF(span.width);
+                painter->setPen(pen);
+                painter->strokePath(span.path, pen);
+            }
+            return;
+        } else if (!m_cachedSinglePath.isEmpty()) {
+            painter->setBrush(Qt::NoBrush);
+            QPen pen(m_color, m_cachedSingleWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter->setPen(pen);
+            painter->strokePath(m_cachedSinglePath, pen);
+            return;
+        }
+
         const auto &pts = m_smoothedPoints.isEmpty() ? m_points : m_smoothedPoints;
         const int n = pts.size();
         if (n == 0) return;
@@ -239,8 +350,7 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWid
             painter->setBrush(Qt::NoBrush);
             painter->drawLine(pts[0].pos, pts[1].pos);
         } else {
-            // Canva-grade vector inking: continuous quadratic Bezier midpoint splines
-            // Eliminates stepped "caterpillar" joints and produces silky smooth, anti-aliased curves.
+            // Live drawing fallback during active stroke input
             qreal minP = 1.0, maxP = 0.0, sumP = 0.0;
             for (const auto &p : pts) {
                 if (p.pressure < minP) minP = p.pressure;
