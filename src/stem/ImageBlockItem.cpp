@@ -90,35 +90,71 @@ QImage ImageBlockItem::processRemoveBackground(const QImage &source, qreal toler
     const int h = img.height();
     if (w <= 0 || h <= 0) return source;
 
-    // Sample background color around edges and corners
-    const QVector<QPoint> samplePoints = {
-        QPoint(0, 0), QPoint(w - 1, 0), QPoint(0, h - 1), QPoint(w - 1, h - 1),
-        QPoint(w / 2, 0), QPoint(0, h / 2), QPoint(w - 1, h / 2), QPoint(w / 2, h - 1),
-        QPoint(qMin(4, w - 1), qMin(4, h - 1)), QPoint(qMax(0, w - 5), qMin(4, h - 1))
-    };
+    // 1. Collect perimeter pixels to reliably determine the paper background color.
+    // Text/diagrams have dark ink, while paper is light (or vice versa for dark mode).
+    QVector<QRgb> perimeter;
+    perimeter.reserve(2 * (w + h));
+    for (int x = 0; x < w; ++x) {
+        perimeter.append(img.pixel(x, 0));
+        perimeter.append(img.pixel(x, h - 1));
+    }
+    for (int y = 1; y < h - 1; ++y) {
+        perimeter.append(img.pixel(0, y));
+        perimeter.append(img.pixel(w - 1, y));
+    }
 
+    // Determine if the document background is light by median luminance of perimeter
+    QVector<int> luminances;
+    luminances.reserve(perimeter.size());
+    for (QRgb p : perimeter) {
+        if (qAlpha(p) > 20) {
+            int lum = static_cast<int>(0.299 * qRed(p) + 0.587 * qGreen(p) + 0.114 * qBlue(p));
+            luminances.append(lum);
+        }
+    }
+    std::sort(luminances.begin(), luminances.end());
+
+    int medianLum = 255;
+    if (!luminances.isEmpty()) {
+        medianLum = luminances[luminances.size() / 2];
+    }
+    const bool isLightDoc = (medianLum >= 128);
+
+    // Calculate background color from perimeter pixels that match the dominant brightness
     qreal bgR = 0, bgG = 0, bgB = 0;
-    int validSamples = 0;
-    for (const QPoint &pt : samplePoints) {
-        QRgb pixel = img.pixel(pt);
-        if (qAlpha(pixel) > 10) {
-            bgR += qRed(pixel);
-            bgG += qGreen(pixel);
-            bgB += qBlue(pixel);
-            validSamples++;
+    int bgSamples = 0;
+    for (QRgb p : perimeter) {
+        if (qAlpha(p) > 20) {
+            int lum = static_cast<int>(0.299 * qRed(p) + 0.587 * qGreen(p) + 0.114 * qBlue(p));
+            // Discard dark text pixels on edge so they don't corrupt the paper background color
+            if (isLightDoc && lum >= 140) {
+                bgR += qRed(p);
+                bgG += qGreen(p);
+                bgB += qBlue(p);
+                bgSamples++;
+            } else if (!isLightDoc && lum <= 110) {
+                bgR += qRed(p);
+                bgG += qGreen(p);
+                bgB += qBlue(p);
+                bgSamples++;
+            }
         }
     }
 
-    if (validSamples > 0) {
-        bgR /= validSamples;
-        bgG /= validSamples;
-        bgB /= validSamples;
+    if (bgSamples > 0) {
+        bgR /= bgSamples;
+        bgG /= bgSamples;
+        bgB /= bgSamples;
     } else {
-        bgR = 255.0; bgG = 255.0; bgB = 255.0;
+        bgR = isLightDoc ? 255.0 : 0.0;
+        bgG = isLightDoc ? 255.0 : 0.0;
+        bgB = isLightDoc ? 255.0 : 0.0;
     }
 
-    const qreal tolDist = tolerance * 255.0;
-    const qreal featherDist = feather * 255.0;
+    // 2. Process all pixels with adaptive document transparency
+    const qreal tolDist = qMax(48.0, tolerance * 255.0);
+    const qreal featherDist = qMax(24.0, feather * 255.0);
+    Q_UNUSED(featherDist);
 
     for (int y = 0; y < h; ++y) {
         auto *line = reinterpret_cast<QRgb *>(img.scanLine(y));
@@ -131,27 +167,47 @@ QImage ImageBlockItem::processRemoveBackground(const QImage &source, qreal toler
             int g = qGreen(p);
             int b = qBlue(p);
 
-            // Perceptually weighted color distance to background
             qreal dr = r - bgR;
             qreal dg = g - bgG;
             qreal db = b - bgB;
-            qreal dist = std::sqrt(0.299 * dr * dr + 0.587 * dg * dg + 0.114 * db * db);
+            qreal colorDist = std::sqrt(0.299 * dr * dr + 0.587 * dg * dg + 0.114 * db * db);
+            int lum = static_cast<int>(0.299 * r + 0.587 * g + 0.114 * b);
+            int maxC = qMax(r, qMax(g, b));
+            int minC = qMin(r, qMin(g, b));
+            int saturationDiff = maxC - minC;
 
-            if (dist <= tolDist) {
-                line[x] = qRgba(r, g, b, 0);
-            } else if (dist < tolDist + featherDist && featherDist > 0.0) {
-                qreal factor = (dist - tolDist) / featherDist;
-                int newAlpha = qBound(0, static_cast<int>(std::round(a * factor)), 255);
-
-                // Anti-fringe defringing: eliminate background tint from semi-transparent edge pixels
-                if (newAlpha > 0) {
-                    qreal alphaNorm = newAlpha / 255.0;
-                    int defringedR = qBound(0, static_cast<int>(std::round((r - bgR * (1.0 - alphaNorm)) / alphaNorm)), 255);
-                    int defringedG = qBound(0, static_cast<int>(std::round((g - bgG * (1.0 - alphaNorm)) / alphaNorm)), 255);
-                    int defringedB = qBound(0, static_cast<int>(std::round((b - bgB * (1.0 - alphaNorm)) / alphaNorm)), 255);
-                    line[x] = qRgba(defringedR, defringedG, defringedB, newAlpha);
-                } else {
+            if (isLightDoc) {
+                // Light document (textbook / paper math snippet)
+                if (colorDist <= tolDist || (lum >= 195 && saturationDiff <= 35)) {
+                    // Definite paper background -> 100% transparent
                     line[x] = qRgba(r, g, b, 0);
+                } else if (lum <= 100) {
+                    // Definite dark ink / text -> keep fully opaque
+                    line[x] = qRgba(r, g, b, a);
+                } else {
+                    // Smooth transition on font anti-aliased edges
+                    qreal factor = qBound(0.0, (195.0 - lum) / 95.0, 1.0);
+                    int newAlpha = qBound(0, static_cast<int>(std::round(a * factor)), 255);
+                    if (newAlpha > 12) {
+                        // Defringe to dark ink so there is ZERO white halo around letters
+                        int inkR = qBound(0, r / 3, 70);
+                        int inkG = qBound(0, g / 3, 70);
+                        int inkB = qBound(0, b / 3, 70);
+                        line[x] = qRgba(inkR, inkG, inkB, newAlpha);
+                    } else {
+                        line[x] = qRgba(r, g, b, 0);
+                    }
+                }
+            } else {
+                // Dark document (screenshot of dark theme app)
+                if (colorDist <= tolDist || (lum <= 50 && saturationDiff <= 25)) {
+                    line[x] = qRgba(r, g, b, 0);
+                } else if (lum >= 170) {
+                    line[x] = qRgba(r, g, b, a);
+                } else {
+                    qreal factor = qBound(0.0, (lum - 50.0) / 120.0, 1.0);
+                    int newAlpha = qBound(0, static_cast<int>(std::round(a * factor)), 255);
+                    line[x] = qRgba(r, g, b, newAlpha);
                 }
             }
         }
