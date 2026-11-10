@@ -369,20 +369,24 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
         }
     }
 
-    // Direct canvas click: if clicking outside of any selected items, deselect all immediately
+    // Direct canvas click: if clicking outside of any selected items AND outside the selection bounding box, deselect all immediately
     if (m_canvasScene && !m_canvasScene->selectedItems().isEmpty()) {
-        const auto itemsAtPos = m_canvasScene->items(scenePos);
-        bool hitSelected = false;
-        for (auto *it : itemsAtPos) {
-            if (it->isSelected()) {
-                hitSelected = true;
-                break;
+        if (m_canvasScene->currentTool() != ToolType::Lasso && m_canvasScene->currentTool() != ToolType::Cursor) {
+            bool isSelectionHit = (m_canvasScene->hitTestSelectionHandle(scenePos) != VectorCanvasScene::SelectionHandle::None);
+            if (!isSelectionHit) {
+                const auto itemsAtPos = m_canvasScene->items(scenePos);
+                for (auto *it : itemsAtPos) {
+                    if (it->isSelected()) {
+                        isSelectionHit = true;
+                        break;
+                    }
+                }
             }
-        }
-        if (!hitSelected) {
-            m_canvasScene->clearSelection();
-            m_canvasScene->invalidate(m_canvasScene->sceneRect(), QGraphicsScene::ForegroundLayer);
-            m_canvasScene->update();
+            if (!isSelectionHit) {
+                m_canvasScene->clearSelection();
+                m_canvasScene->invalidate(m_canvasScene->sceneRect(), QGraphicsScene::ForegroundLayer);
+                m_canvasScene->update();
+            }
         }
     }
 
@@ -719,6 +723,9 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
             m_lastTabletTimeMs = QDateTime::currentMSecsSinceEpoch();
             emit pressureChanged(pressure);
             m_canvasScene->handlePointerMove(scenePos, pressure, tx, ty, isEraser);
+            if (!m_canvasScene->selectedItems().isEmpty()) {
+                updateSelectionActionBarPosition();
+            }
             event->accept();
         } else {
             // Hovering without pressure: let Qt synthesize smooth mouse moves so cursor doesn't freeze or jump
