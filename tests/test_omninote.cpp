@@ -485,15 +485,40 @@ void testLassoBatchTransformations() {
     assert(std::abs((newPos1 - originalPos1).x() - 40.0) < 1e-4);
     assert(std::abs((newPos1 - originalPos1).y() - 30.0) < 1e-4);
 
+    // 2b. Batch Move by dragging on EMPTY WHITESPACE inside the selection bounding box
+    QPointF emptyWhitespace(newPos1.x() + 15, newPos1.y() + 2);
+    QPointF posBeforeEmptyMove = s1->points().first().pos;
+    scene.handlePointerPress(emptyWhitespace, 0.75);
+    scene.handlePointerMove(emptyWhitespace + QPointF(15, 10), 0.75);
+    scene.handlePointerRelease(emptyWhitespace + QPointF(15, 10), 0.0);
+    assert(std::abs((s1->points().first().pos - posBeforeEmptyMove).x() - 15.0) < 1e-4);
+    assert(std::abs((s1->points().first().pos - posBeforeEmptyMove).y() - 10.0) < 1e-4);
+
+    // 2c. Batch Move in Cursor mode inside selection box
+    scene.setCurrentTool(ToolType::Cursor);
+    assert(!scene.selectedItems().isEmpty());
+    QPointF cursorDragPoint = scene.selectionBoundingRect().center();
+    QPointF posBeforeCursorMove = s1->points().first().pos;
+    scene.handlePointerPress(cursorDragPoint, 0.75);
+    scene.handlePointerMove(cursorDragPoint + QPointF(-15, -10), 0.75);
+    scene.handlePointerRelease(cursorDragPoint + QPointF(-15, -10), 0.0);
+    assert(std::abs((s1->points().first().pos - posBeforeCursorMove).x() - (-15.0)) < 1e-4);
+    assert(std::abs((s1->points().first().pos - posBeforeCursorMove).y() - (-10.0)) < 1e-4);
+
+    scene.setCurrentTool(ToolType::Lasso);
+
     // Undo Move
     assert(scene.undoStack()->canUndo());
+    scene.undoStack()->undo();
+    scene.undoStack()->undo();
     scene.undoStack()->undo();
     assert(std::abs((s1->points().first().pos - originalPos1).x()) < 1e-4);
 
     // Redo Move
     assert(scene.undoStack()->canRedo());
     scene.undoStack()->redo();
-    assert(std::abs((s1->points().first().pos - originalPos1).x() - 40.0) < 1e-4);
+    scene.undoStack()->redo();
+    scene.undoStack()->redo();
 
     // 3. Batch Recolor
     scene.changeSelectedColor(QColor("#7dcfff"));

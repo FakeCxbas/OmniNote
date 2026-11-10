@@ -229,14 +229,16 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
         return;
     }
 
-    // Deselect any selected items immediately if clicking/drawing outside them
-    if (activeTool != ToolType::Lasso && !selectedItems().isEmpty()) {
-        bool hitSelectedItem = false;
-        const auto itemsUnder = items(clampedPos);
-        for (auto *it : itemsUnder) {
-            if (it->isSelected()) {
-                hitSelectedItem = true;
-                break;
+    // Deselect any selected items immediately if clicking/drawing outside them and outside the selection bounding box
+    if (activeTool != ToolType::Lasso && activeTool != ToolType::Cursor && !selectedItems().isEmpty()) {
+        bool hitSelectedItem = (hitTestSelectionHandle(clampedPos) != SelectionHandle::None);
+        if (!hitSelectedItem) {
+            const auto itemsUnder = items(clampedPos);
+            for (auto *it : itemsUnder) {
+                if (it->isSelected()) {
+                    hitSelectedItem = true;
+                    break;
+                }
             }
         }
         if (!hitSelectedItem) {
@@ -245,17 +247,6 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
             invalidate(sceneRect(), ForegroundLayer);
             update();
         }
-    }
-
-    if (activeTool == ToolType::Cursor) {
-        QGraphicsItem *topItem = itemAt(clampedPos, QTransform());
-        if (!topItem || topItem->type() == StrokeItem::Type) {
-            clearSelection();
-            emit selectionStateChanged(false);
-            invalidate(sceneRect(), ForegroundLayer);
-            update();
-        }
-        return;
     }
 
     if (activeTool == ToolType::Eraser) {
@@ -271,7 +262,7 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
         return;
     }
 
-    if (activeTool == ToolType::Lasso) {
+    if (activeTool == ToolType::Lasso || activeTool == ToolType::Cursor) {
         if (!selectedItems().isEmpty()) {
             SelectionHandle handle = hitTestSelectionHandle(clampedPos);
             QRectF box = selectionBoundingRect().adjusted(-8, -8, 8, 8);
@@ -300,13 +291,25 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
             }
         }
 
-        clearSelection();
-        emit selectionStateChanged(false);
-        m_isLassoing = true;
-        m_lassopoly.clear();
-        m_lassopoly << clampedPos;
-        invalidate(sceneRect(), ForegroundLayer);
-        return;
+        if (activeTool == ToolType::Lasso) {
+            clearSelection();
+            emit selectionStateChanged(false);
+            m_isLassoing = true;
+            m_lassopoly.clear();
+            m_lassopoly << clampedPos;
+            invalidate(sceneRect(), ForegroundLayer);
+            return;
+        } else {
+            // Cursor tool clicked outside selection
+            QGraphicsItem *topItem = itemAt(clampedPos, QTransform());
+            if (!topItem || topItem->type() == StrokeItem::Type) {
+                clearSelection();
+                emit selectionStateChanged(false);
+                invalidate(sceneRect(), ForegroundLayer);
+                update();
+            }
+            return;
+        }
     }
 
     // Drawing a stroke (Pen, Highlighter, or Shapes) strictly inside the page
