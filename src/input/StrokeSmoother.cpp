@@ -5,7 +5,7 @@
 namespace OmniNote {
 
 StrokeSmoother::StrokeSmoother()
-    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.80) {
+    : m_hasPrevious(false), m_filteredPos(0.0, 0.0), m_filteredPressure(0.5), m_alpha(0.88) {
 }
 
 void StrokeSmoother::reset() {
@@ -27,17 +27,17 @@ StrokePoint StrokeSmoother::filterPoint(const StrokePoint &rawPoint) {
     qreal dy = rawPoint.pos.y() - m_filteredPos.y();
     qreal dist = std::hypot(dx, dy);
 
-    // Canva-style adaptive alpha: responsive near-zero latency while eliminating digitizer jitter
+    // High-precision Wacom & stylus tracking: zero lag for intentional penmanship while suppressing sensor noise
     qreal adaptiveAlpha = m_alpha;
     if (dist < 3.0) {
-        adaptiveAlpha = qBound(0.62, m_alpha * (0.75 + 0.25 * (dist / 3.0)), 0.80);
-    } else if (dist > 8.0) {
-        adaptiveAlpha = qMin(0.96, m_alpha + 0.12);
+        adaptiveAlpha = qBound(0.80, m_alpha * (0.85 + 0.15 * (dist / 3.0)), 0.92);
+    } else if (dist > 6.0) {
+        adaptiveAlpha = qMin(0.98, m_alpha + 0.08);
     }
 
     m_filteredPos.setX(m_filteredPos.x() + adaptiveAlpha * (rawPoint.pos.x() - m_filteredPos.x()));
     m_filteredPos.setY(m_filteredPos.y() + adaptiveAlpha * (rawPoint.pos.y() - m_filteredPos.y()));
-    m_filteredPressure += qBound(0.40, adaptiveAlpha * 0.70, 0.65) * (rawPoint.pressure - m_filteredPressure);
+    m_filteredPressure += qBound(0.65, adaptiveAlpha * 0.85, 0.95) * (rawPoint.pressure - m_filteredPressure);
 
     return StrokePoint(m_filteredPos, m_filteredPressure, rawPoint.tiltX, rawPoint.tiltY, rawPoint.timestamp);
 }

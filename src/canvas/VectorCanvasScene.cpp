@@ -323,6 +323,7 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
     m_smoother.reset();
     m_activePoints.clear();
     m_lastInputPos = effectivePos;
+    m_lastInputPressure = pressure;
 
     StrokePoint rawPt(effectivePos, pressure, tx, ty, QDateTime::currentMSecsSinceEpoch());
     StrokePoint filtered = m_smoother.filterPoint(rawPt);
@@ -404,13 +405,15 @@ void VectorCanvasScene::handlePointerMove(const QPointF &scenePos, qreal pressur
             }
         }
 
-        // Distance filter to drop micro-tremors and redundant events (< 0.2px)
+        // Distance filter to drop micro-tremors and redundant events (< 0.2px) unless pressure changed significantly
         qreal dx = effectivePos.x() - m_lastInputPos.x();
         qreal dy = effectivePos.y() - m_lastInputPos.y();
-        if (dx * dx + dy * dy < 0.04) {
+        qreal dp = std::abs(pressure - m_lastInputPressure);
+        if (dx * dx + dy * dy < 0.04 && dp < 0.02) {
             return;
         }
         m_lastInputPos = effectivePos;
+        m_lastInputPressure = pressure;
 
         StrokePoint rawPt(effectivePos, pressure, tx, ty, QDateTime::currentMSecsSinceEpoch());
 

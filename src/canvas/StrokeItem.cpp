@@ -13,9 +13,11 @@ static inline qreal fastCanvaPressureFactor(qreal p) {
         std::array<qreal, 256> table;
         for (int i = 0; i < 256; ++i) {
             qreal normalizedP = static_cast<qreal>(i) / 255.0;
-            // Canva pen dynamics: stable, uniform ink body with gentle organic modulation
-            // p=0.0 -> 0.85, p=0.5 -> 0.98 (~1.00), p=1.0 -> 1.15
-            table[i] = 0.85 + 0.30 * std::pow(normalizedP, 1.2);
+            // Wacom stylus pen dynamics: authentic expressive response
+            // p=0.0 -> 0.60 (delicate hairline, small math indices)
+            // p=0.5 -> 1.00 (nominal writing baseline)
+            // p=1.0 -> 1.40 (rich emphatic stroke)
+            table[i] = 0.60 + 0.80 * std::pow(normalizedP, 1.05);
         }
         return table;
     }();
