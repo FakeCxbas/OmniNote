@@ -24,6 +24,8 @@ QCursor CanvasCursorFactory::createCursor(ToolType tool, const QColor &color, qr
         return createShapeCursor(tool);
     case ToolType::Text:
         return QCursor(Qt::IBeamCursor);
+    case ToolType::Cursor:
+        return QCursor(Qt::ArrowCursor);
     default:
         return createPenCursor(color, width);
     }

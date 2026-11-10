@@ -1034,7 +1034,17 @@ void testTextBlockSelectionAndLasso() {
     assert(std::abs(textBlock->pos().x() - originalPos.x()) < 1e-3);
     assert(std::abs(textBlock->pos().y() - originalPos.y()) < 1e-3);
 
-    std::cout << "  ✓ Text selection flags, lasso tap select, recolor, duplicate & scale passed!" << std::endl;
+    // 6. Test dedicated Cursor mode vs Pen mode interactive protection
+    assert(!AppIcons::get(AppIcons::IconType::Cursor).isNull());
+    assert(CanvasCursorFactory::createCursor(ToolType::Cursor).shape() == Qt::ArrowCursor);
+
+    scene.setCurrentTool(ToolType::Cursor);
+    assert(textBlock->isInteractiveMode());
+
+    scene.setCurrentTool(ToolType::Pen);
+    assert(!textBlock->isInteractiveMode());
+
+    std::cout << "  ✓ Text selection flags, lasso tap select, recolor, duplicate, scale & Cursor tool protection passed!" << std::endl;
 }
 
 void testCanvasSelectionAndGrouping() {

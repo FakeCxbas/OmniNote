@@ -8,6 +8,7 @@
 #include <QFont>
 #include <QFontMetrics>
 #include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QCursor>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -25,29 +26,7 @@ TextEditorWidget::TextEditorWidget(QWidget *parent) : QTextEdit(parent) {
     setLineWrapMode(QTextEdit::WidgetWidth);
     setAcceptRichText(false);
     setPlaceholderText("Escribe un título o texto aquí...");
-    setAttribute(Qt::WA_TranslucentBackground, true);
-    setTextInteractionFlags(Qt::TextEditorInteraction);
-    if (viewport()) {
-        viewport()->setCursor(Qt::IBeamCursor);
-    }
-
-    setStyleSheet(
-        "QTextEdit {"
-        "   background-color: transparent;"
-        "   border: none;"
-        "   padding: 4px;"
-        "   selection-background-color: #2b5c9e;"
-        "   selection-color: #ffffff;"
-        "}"
-        "QScrollBar:vertical {"
-        "   background: transparent;"
-        "   width: 5px;"
-        "}"
-        "QScrollBar::handle:vertical {"
-        "   background: rgba(59, 66, 97, 180);"
-        "   border-radius: 2px;"
-        "}"
-    );
+    setStyleSheet("QTextEdit { background: transparent; border: none; padding: 0px 4px; }");
 
     connect(this, &QTextEdit::textChanged, this, &TextEditorWidget::contentChanged);
 }
@@ -67,147 +46,22 @@ void TextEditorWidget::focusOutEvent(QFocusEvent *event) {
 // ============================================================================
 
 TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(parent) {
-    setMinimumSize(180, 60);
-    resize(380, 95);
+    setMinimumSize(160, 36);
+    resize(380, 75);
     setAttribute(Qt::WA_OpaquePaintEvent, false);
     setAttribute(Qt::WA_TranslucentBackground, true);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
 
+    // Pure zero-margin layout: editor is permanently locked at (0, 0)
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(4, 2, 4, 4);
-    mainLayout->setSpacing(2);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
 
-    // Header bar container widget (collapses when hidden so text aligns right at the top)
-    m_headerWidget = new QWidget(this);
-    m_headerWidget->installEventFilter(this);
-    m_headerWidget->setCursor(Qt::SizeAllCursor);
-    auto sp = m_headerWidget->sizePolicy();
-    sp.setRetainSizeWhenHidden(false);
-    m_headerWidget->setSizePolicy(sp);
-
-    auto *headerLayout = new QHBoxLayout(m_headerWidget);
-    headerLayout->setContentsMargins(0, 0, 0, 0);
-    headerLayout->setSpacing(6);
-
-    auto *iconLabel = new QLabel(m_headerWidget);
-    iconLabel->setPixmap(AppIcons::getPixmap(AppIcons::IconType::Text, QColor("#7aa2f7"), 14));
-    iconLabel->setStyleSheet("background: transparent;");
-    headerLayout->addWidget(iconLabel);
-
-    m_styleCombo = new QComboBox(m_headerWidget);
-    m_styleCombo->addItem("Texto Normal", BodyText);
-    m_styleCombo->addItem("Título (H1)", TitleH1);
-    m_styleCombo->addItem("Subtítulo (H2)", SubtitleH2);
-    m_styleCombo->addItem("Encabezado (H3)", HeadingH3);
-    m_styleCombo->setStyleSheet(
-        "QComboBox {"
-        "   background-color: rgba(36, 40, 59, 180);"
-        "   color: #c0caf5;"
-        "   border: 1px solid rgba(59, 66, 97, 180);"
-        "   border-radius: 4px;"
-        "   padding: 2px 8px;"
-        "   font-size: 8pt;"
-        "   font-weight: 500;"
-        "}"
-        "QComboBox:hover { background-color: rgba(47, 53, 73, 220); border-color: #7aa2f7; }"
-        "QComboBox::drop-down { border: none; width: 14px; }"
-        "QComboBox QAbstractItemView {"
-        "   background-color: #1f2335;"
-        "   color: #c0caf5;"
-        "   border: 1px solid #3b4261;"
-        "   selection-background-color: #3d59a1;"
-        "   selection-color: #ffffff;"
-        "}"
-    );
-    headerLayout->addWidget(m_styleCombo);
-
-    m_colorBtn = new QPushButton("Color", m_headerWidget);
-    m_colorBtn->setIcon(AppIcons::get(AppIcons::IconType::Palette, m_textColor, 13));
-    m_colorBtn->setStyleSheet(
-        "QPushButton {"
-        "   background-color: rgba(36, 40, 59, 180);"
-        "   color: #7aa2f7;"
-        "   border: 1px solid rgba(59, 66, 97, 180);"
-        "   border-radius: 4px;"
-        "   padding: 2px 10px;"
-        "   font-size: 8pt;"
-        "   font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(47, 53, 73, 220); border-color: #7aa2f7; }"
-    );
-
-    auto *colorMenu = new QMenu(m_colorBtn);
-    const QVector<QPair<QString, QColor>> colors = {
-        {"Tinta Negra (#111827)", QColor("#111827")},
-        {"Azul Cuaderno (#1e3a8a)", QColor("#1e3a8a")},
-        {"Gris Grafito (#374151)", QColor("#374151")},
-        {"Azul Tokyo (#7aa2f7)", QColor("#7aa2f7")},
-        {"Rojo (#dc2626)", QColor("#dc2626")},
-        {"Verde (#16a34a)", QColor("#16a34a")},
-        {"Blanco Nieve (#ffffff)", QColor("#ffffff")},
-        {"Lavanda (#c0caf5)", QColor("#c0caf5")}
-    };
-
-    for (const auto &c : colors) {
-        auto *act = colorMenu->addAction(c.first);
-        connect(act, &QAction::triggered, this, [this, c]() {
-            setTextColor(c.second);
-        });
-    }
-
-    auto *customAct = colorMenu->addAction("Personalizado...");
-    connect(customAct, &QAction::triggered, this, [this]() {
-        auto *dlg = new QColorDialog(m_textColor, this->window());
-        dlg->setWindowTitle("Color del Texto");
-        dlg->setAttribute(Qt::WA_DeleteOnClose);
-        dlg->setOption(QColorDialog::DontUseNativeDialog, true);
-        connect(dlg, &QColorDialog::currentColorChanged, this, [this](const QColor &c) {
-            if (c.isValid()) {
-                setTextColor(c);
-            }
-        });
-        connect(dlg, &QColorDialog::colorSelected, this, [this](const QColor &c) {
-            if (c.isValid()) {
-                setTextColor(c);
-            }
-        });
-        dlg->show();
-        dlg->raise();
-        dlg->activateWindow();
-    });
-
-    m_colorBtn->setMenu(colorMenu);
-    headerLayout->addWidget(m_colorBtn);
-
-    headerLayout->addStretch(1);
-
-    m_closeBtn = new QPushButton(m_headerWidget);
-    m_closeBtn->setIcon(AppIcons::get(AppIcons::IconType::Close, QColor("#565f89"), 12));
-    m_closeBtn->setFixedSize(22, 20);
-    m_closeBtn->setCursor(Qt::PointingHandCursor);
-    m_closeBtn->setStyleSheet(
-        "QPushButton {"
-        "   background: transparent;"
-        "   border: none;"
-        "   border-radius: 4px;"
-        "   font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(247, 118, 142, 200); color: #ffffff; }"
-    );
-    connect(m_closeBtn, &QPushButton::clicked, this, &TextBlockContainerWidget::deleteRequested);
-    headerLayout->addWidget(m_closeBtn);
-
-    mainLayout->addWidget(m_headerWidget);
-
-    // Text editor area
     m_editor = new TextEditorWidget(this);
     m_editor->installEventFilter(this);
-    mainLayout->addWidget(m_editor, 1);
+    mainLayout->addWidget(m_editor);
 
-    connect(m_styleCombo, &QComboBox::currentIndexChanged, this, [this](int idx) {
-        setStylePreset(static_cast<StylePreset>(m_styleCombo->itemData(idx).toInt()));
-    });
     connect(m_editor, &TextEditorWidget::contentChanged, this, [this]() {
         if (m_editor && m_editor->document()) {
             qreal rowHeight = 31.625;
@@ -228,13 +82,14 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
         }
         emit textChanged();
     });
+
     connect(m_editor, &TextEditorWidget::focusChanged, this, [this](bool f) {
         m_isFocused = f;
-        updateControlsVisibility();
+        update();
+        emit interactionStateChanged();
     });
 
     applyTextStyle();
-    updateControlsVisibility();
 }
 
 QString TextBlockContainerWidget::text() const {
@@ -250,43 +105,48 @@ void TextBlockContainerWidget::setText(const QString &text) {
 
 void TextBlockContainerWidget::focusEditorAndSelectAll() {
     m_isFocused = true;
-    updateControlsVisibility();
+    update();
     if (m_editor) {
         m_editor->setFocus();
         m_editor->selectAll();
     }
+    emit interactionStateChanged();
+}
+
+void TextBlockContainerWidget::clearEditorFocus() {
+    if (m_editor) {
+        m_editor->clearFocus();
+    }
+    m_isFocused = false;
+    update();
 }
 
 void TextBlockContainerWidget::setStylePreset(StylePreset preset) {
     m_stylePreset = preset;
-    int idx = m_styleCombo->findData(preset);
-    if (idx >= 0 && m_styleCombo->currentIndex() != idx) {
-        m_styleCombo->setCurrentIndex(idx);
-    }
     applyTextStyle();
     emit textChanged();
 }
 
 void TextBlockContainerWidget::setTextColor(const QColor &color) {
     m_textColor = color;
-    m_colorBtn->setStyleSheet(QString(
-        "QPushButton {"
-        "   background-color: rgba(36, 40, 59, 180);"
-        "   color: %1;"
-        "   border: 1px solid rgba(59, 66, 97, 180);"
-        "   border-radius: 4px;"
-        "   padding: 2px 10px;"
-        "   font-size: 8pt;"
-        "   font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(47, 53, 73, 220); border-color: %1; }"
-    ).arg(color.name()));
     applyTextStyle();
     emit textChanged();
 }
 
 void TextBlockContainerWidget::setContainerSize(const QSize &s) {
     resize(s.expandedTo(minimumSize()));
+}
+
+void TextBlockContainerWidget::setInteractiveMode(bool enable) {
+    m_isInteractiveMode = enable;
+    if (!enable) {
+        m_isHovered = false;
+        m_isFocused = false;
+        m_activeResizeHandle = NoHandle;
+        m_hoverResizeHandle = NoHandle;
+        setCursor(Qt::ArrowCursor);
+    }
+    update();
 }
 
 void TextBlockContainerWidget::applyTextStyle() {
@@ -327,11 +187,10 @@ void TextBlockContainerWidget::applyTextStyle() {
 
     m_editor->setFont(f);
 
-    // Synchronize line-height so each line of written text matches the notebook rows
     QTextDocument *doc = m_editor->document();
     if (doc) {
         doc->setDefaultFont(f);
-        doc->setDocumentMargin(2);
+        doc->setDocumentMargin(0);
         QTextBlockFormat blockFormat;
         blockFormat.setLineHeight(rowHeight, QTextBlockFormat::FixedHeight);
         blockFormat.setTopMargin(0);
@@ -354,7 +213,7 @@ void TextBlockContainerWidget::applyTextStyle() {
         "}"
         "QScrollBar:vertical {"
         "   background: transparent;"
-        "   width: 5px;"
+        "   width: 4px;"
         "}"
         "QScrollBar::handle:vertical {"
         "   background: rgba(59, 66, 97, 180);"
@@ -366,94 +225,59 @@ void TextBlockContainerWidget::applyTextStyle() {
 TextBlockContainerWidget::ResizeHandle TextBlockContainerWidget::hitTestResizeHandle(const QPoint &pos) const {
     const int w = width();
     const int h = height();
-    const int cornerSize = 22;
-    const int edgeMargin = 8;
+    const int cornerSize = 20;
 
-    // Corner handle (bottom-right 22x22 area)
     if (pos.x() >= w - cornerSize && pos.y() >= h - cornerSize) {
         return CornerHandle;
-    }
-    // Right edge handle (horizontal width adjuster)
-    if (pos.x() >= w - edgeMargin && pos.y() >= 32 && pos.y() < h - cornerSize) {
-        return RightHandle;
-    }
-    // Bottom edge handle (vertical height adjuster)
-    if (pos.y() >= h - edgeMargin && pos.x() >= 10 && pos.x() < w - cornerSize) {
-        return BottomHandle;
     }
     return NoHandle;
 }
 
 void TextBlockContainerWidget::enterEvent(QEnterEvent *event) {
-    m_isHovered = true;
-    updateControlsVisibility();
+    if (m_isInteractiveMode) {
+        m_isHovered = true;
+        update();
+        emit interactionStateChanged();
+    }
     QWidget::enterEvent(event);
 }
 
 void TextBlockContainerWidget::leaveEvent(QEvent *event) {
-    if (!rect().contains(mapFromGlobal(QCursor::pos()))) {
-        m_isHovered = false;
-        m_hoverResizeHandle = NoHandle;
-        setCursor(Qt::ArrowCursor);
-        updateControlsVisibility();
-    }
+    m_isHovered = false;
+    m_hoverResizeHandle = NoHandle;
+    setCursor(Qt::ArrowCursor);
+    update();
+    emit interactionStateChanged();
     QWidget::leaveEvent(event);
 }
 
 bool TextBlockContainerWidget::eventFilter(QObject *obj, QEvent *event) {
+    if (!m_isInteractiveMode) {
+        return QWidget::eventFilter(obj, event);
+    }
+
     if (obj == m_editor) {
         if (event->type() == QEvent::Enter) {
             m_isHovered = true;
-            updateControlsVisibility();
+            update();
+            emit interactionStateChanged();
         } else if (event->type() == QEvent::Leave) {
             if (!rect().contains(mapFromGlobal(QCursor::pos()))) {
                 m_isHovered = false;
-                m_hoverResizeHandle = NoHandle;
-                updateControlsVisibility();
-            }
-        }
-    } else if (obj == m_headerWidget) {
-        if (event->type() == QEvent::MouseButtonPress) {
-            auto *me = static_cast<QMouseEvent *>(event);
-            if (me->button() == Qt::LeftButton) {
-                QWidget *child = m_headerWidget->childAt(me->pos());
-                if (!child || child == m_headerWidget || qobject_cast<QLabel *>(child)) {
-                    m_draggingHeader = true;
-                    m_dragStartPos = me->globalPosition().toPoint();
-                    event->accept();
-                    return true;
-                }
-            }
-        } else if (event->type() == QEvent::MouseMove) {
-            if (m_draggingHeader) {
-                auto *me = static_cast<QMouseEvent *>(event);
-                QPoint delta = me->globalPosition().toPoint() - m_dragStartPos;
-                m_dragStartPos = me->globalPosition().toPoint();
-                emit moveDeltaRequested(QPointF(delta.x(), delta.y()));
-                event->accept();
-                return true;
-            }
-        } else if (event->type() == QEvent::MouseButtonRelease) {
-            if (m_draggingHeader) {
-                m_draggingHeader = false;
-                emit textChanged();
-                event->accept();
-                return true;
+                update();
+                emit interactionStateChanged();
             }
         }
     }
     return QWidget::eventFilter(obj, event);
 }
 
-void TextBlockContainerWidget::updateControlsVisibility() {
-    const bool isInteractive = m_isHovered || m_isFocused || (m_activeResizeHandle != NoHandle) || m_draggingHeader;
-    if (m_headerWidget) {
-        m_headerWidget->setVisible(isInteractive);
-    }
-    update();
-}
-
 void TextBlockContainerWidget::mousePressEvent(QMouseEvent *event) {
+    if (!m_isInteractiveMode) {
+        event->ignore();
+        return;
+    }
+
     if (event->button() == Qt::LeftButton) {
         ResizeHandle handle = hitTestResizeHandle(event->pos());
         if (handle != NoHandle) {
@@ -465,8 +289,7 @@ void TextBlockContainerWidget::mousePressEvent(QMouseEvent *event) {
             return;
         }
 
-        // Header or background drag (any click outside editor on container)
-        m_draggingHeader = true;
+        m_draggingItem = true;
         m_dragStartPos = event->globalPosition().toPoint();
         event->accept();
         return;
@@ -475,26 +298,23 @@ void TextBlockContainerWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void TextBlockContainerWidget::mouseMoveEvent(QMouseEvent *event) {
-    if (m_activeResizeHandle != NoHandle) {
+    if (!m_isInteractiveMode) {
+        event->ignore();
+        return;
+    }
+
+    if (m_activeResizeHandle == CornerHandle) {
         QPoint delta = event->globalPosition().toPoint() - m_dragStartPos;
-        int newW = m_dragStartSize.width();
-        int newH = m_dragStartSize.height();
-
-        if (m_activeResizeHandle == CornerHandle || m_activeResizeHandle == RightHandle) {
-            newW = qMax(180, m_dragStartSize.width() + delta.x());
-        }
-        if (m_activeResizeHandle == CornerHandle || m_activeResizeHandle == BottomHandle) {
-            newH = qMax(60, m_dragStartSize.height() + delta.y());
-        }
-
+        int newW = qMax(minimumWidth(), m_dragStartSize.width() + delta.x());
+        int newH = qMax(minimumHeight(), m_dragStartSize.height() + delta.y());
         resize(newW, newH);
-        emit textChanged();
         update();
+        emit textChanged();
         event->accept();
         return;
     }
 
-    if (m_draggingHeader) {
+    if (m_draggingItem) {
         QPoint delta = event->globalPosition().toPoint() - m_dragStartPos;
         m_dragStartPos = event->globalPosition().toPoint();
         emit moveDeltaRequested(QPointF(delta.x(), delta.y()));
@@ -502,30 +322,15 @@ void TextBlockContainerWidget::mouseMoveEvent(QMouseEvent *event) {
         return;
     }
 
-    // Update hover state and cursor
-    ResizeHandle handle = hitTestResizeHandle(event->pos());
-    if (handle != m_hoverResizeHandle) {
-        m_hoverResizeHandle = handle;
-        update();
-    }
-
-    switch (m_hoverResizeHandle) {
-    case CornerHandle:
-        setCursor(Qt::SizeFDiagCursor);
-        break;
-    case RightHandle:
-        setCursor(Qt::SizeHorCursor);
-        break;
-    case BottomHandle:
-        setCursor(Qt::SizeVerCursor);
-        break;
-    default:
-        if (event->pos().y() <= 32) {
-            setCursor(Qt::SizeAllCursor);
+    ResizeHandle h = hitTestResizeHandle(event->pos());
+    if (h != m_hoverResizeHandle) {
+        m_hoverResizeHandle = h;
+        if (h == CornerHandle) {
+            setCursor(Qt::SizeFDiagCursor);
         } else {
             setCursor(Qt::ArrowCursor);
         }
-        break;
+        update();
     }
 
     QWidget::mouseMoveEvent(event);
@@ -533,9 +338,9 @@ void TextBlockContainerWidget::mouseMoveEvent(QMouseEvent *event) {
 
 void TextBlockContainerWidget::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
-        if (m_activeResizeHandle != NoHandle || m_draggingHeader) {
+        if (m_activeResizeHandle != NoHandle || m_draggingItem) {
             m_activeResizeHandle = NoHandle;
-            m_draggingHeader = false;
+            m_draggingItem = false;
             emit textChanged();
             update();
             event->accept();
@@ -546,9 +351,9 @@ void TextBlockContainerWidget::mouseReleaseEvent(QMouseEvent *event) {
 }
 
 void TextBlockContainerWidget::paintEvent(QPaintEvent * /*event*/) {
-    const bool isInteractive = m_isHovered || m_isFocused || (m_activeResizeHandle != NoHandle) || m_draggingHeader;
+    const bool isInteractive = m_isInteractiveMode && (m_isHovered || m_isFocused || (m_activeResizeHandle != NoHandle));
     if (!isInteractive) {
-        return; // Zero painting when idle: no recuadro, no frame, no grip! Completely clean on the canvas.
+        return; // Zero painting: no box, no frame, no grips! Completely clean on the canvas.
     }
 
     QPainter painter(this);
@@ -557,7 +362,7 @@ void TextBlockContainerWidget::paintEvent(QPaintEvent * /*event*/) {
     const int w = width();
     const int h = height();
 
-    // Corner resize grip only (NO bounding box / NO recuadro!)
+    // Corner resize grip only
     const bool cornerHovered = (m_hoverResizeHandle == CornerHandle) || (m_activeResizeHandle == CornerHandle);
     QColor accentColor = cornerHovered ? QColor("#7dcfff") : QColor(122, 162, 247, 160);
 
@@ -566,25 +371,6 @@ void TextBlockContainerWidget::paintEvent(QPaintEvent * /*event*/) {
     painter.drawLine(QPointF(w - 14, h - 4), QPointF(w - 4, h - 14));
     painter.drawLine(QPointF(w - 9, h - 4), QPointF(w - 4, h - 9));
     painter.drawLine(QPointF(w - 4, h - 4), QPointF(w - 4, h - 4));
-
-    // Live dimension badge ONLY while actively dragging to resize
-    if (m_activeResizeHandle != NoHandle) {
-        QString dimText = QString("%1 × %2 px").arg(w).arg(h);
-        QFont badgeFont("Inter", 8, QFont::DemiBold);
-        painter.setFont(badgeFont);
-
-        QFontMetrics fm(badgeFont);
-        int badgeW = fm.horizontalAdvance(dimText) + 14;
-        int badgeH = fm.height() + 6;
-        QRectF badgeRect(w - badgeW - 6, h - badgeH - 6, badgeW, badgeH);
-
-        painter.setPen(QPen(QColor("#7aa2f7"), 1.0));
-        painter.setBrush(QColor(22, 26, 40, 230));
-        painter.drawRoundedRect(badgeRect, 4.0, 4.0);
-
-        painter.setPen(QColor("#7dcfff"));
-        painter.drawText(badgeRect, Qt::AlignCenter, dimText);
-    }
 }
 
 QString TextBlockContainerWidget::serialize() const {
@@ -628,19 +414,226 @@ TextBlockItem::TextBlockItem(const QPointF &initialPos, QGraphicsItem *parent)
     setZValue(15.0);
     setFlags(ItemIsSelectable | ItemIsFocusable | ItemSendsGeometryChanges);
 
-    connect(m_containerWidget, &TextBlockContainerWidget::deleteRequested, this, [this]() {
+    setupFloatingHeader();
+
+    connect(m_containerWidget, &TextBlockContainerWidget::textChanged, this, &TextBlockItem::blockModified);
+    connect(m_containerWidget, &TextBlockContainerWidget::interactionStateChanged, this, &TextBlockItem::updateHeaderVisibility);
+    connect(m_containerWidget, &TextBlockContainerWidget::moveDeltaRequested, this, [this](const QPointF &delta) {
+        setPos(this->pos() + delta);
+        emit blockModified();
+    });
+
+    setInteractiveMode(false);
+}
+
+TextBlockItem::~TextBlockItem() {
+    if (m_headerWidget) {
+        m_headerWidget->deleteLater();
+        m_headerWidget = nullptr;
+    }
+}
+
+void TextBlockItem::setupFloatingHeader() {
+    m_headerWidget = new QWidget();
+    m_headerWidget->setAttribute(Qt::WA_TranslucentBackground, true);
+    m_headerWidget->setFixedHeight(28);
+    m_headerWidget->setStyleSheet(
+        "QWidget#HeaderBar {"
+        "   background-color: rgba(22, 26, 40, 245);"
+        "   border: 1px solid rgba(59, 66, 97, 230);"
+        "   border-radius: 6px;"
+        "}"
+    );
+    m_headerWidget->setObjectName("HeaderBar");
+
+    auto *headerLayout = new QHBoxLayout(m_headerWidget);
+    headerLayout->setContentsMargins(6, 2, 6, 2);
+    headerLayout->setSpacing(6);
+
+    auto *iconLabel = new QLabel(m_headerWidget);
+    iconLabel->setPixmap(AppIcons::getPixmap(AppIcons::IconType::Text, QColor("#7aa2f7"), 14));
+    iconLabel->setStyleSheet("background: transparent; border: none;");
+    headerLayout->addWidget(iconLabel);
+
+    m_styleCombo = new QComboBox(m_headerWidget);
+    m_styleCombo->addItem("Texto Normal", TextBlockContainerWidget::BodyText);
+    m_styleCombo->addItem("Título (H1)", TextBlockContainerWidget::TitleH1);
+    m_styleCombo->addItem("Subtítulo (H2)", TextBlockContainerWidget::SubtitleH2);
+    m_styleCombo->addItem("Encabezado (H3)", TextBlockContainerWidget::HeadingH3);
+    m_styleCombo->setStyleSheet(
+        "QComboBox {"
+        "   background-color: rgba(36, 40, 59, 200);"
+        "   color: #c0caf5;"
+        "   border: 1px solid rgba(59, 66, 97, 180);"
+        "   border-radius: 4px;"
+        "   padding: 1px 6px;"
+        "   font-size: 8pt;"
+        "   font-weight: 500;"
+        "}"
+        "QComboBox:hover { background-color: rgba(47, 53, 73, 230); border-color: #7aa2f7; }"
+        "QComboBox::drop-down { border: none; width: 14px; }"
+    );
+    headerLayout->addWidget(m_styleCombo);
+
+    m_colorBtn = new QPushButton("Color", m_headerWidget);
+    m_colorBtn->setIcon(AppIcons::get(AppIcons::IconType::Palette, m_containerWidget->textColor(), 13));
+    m_colorBtn->setStyleSheet(
+        "QPushButton {"
+        "   background-color: rgba(36, 40, 59, 200);"
+        "   color: #7aa2f7;"
+        "   border: 1px solid rgba(59, 66, 97, 180);"
+        "   border-radius: 4px;"
+        "   padding: 2px 8px;"
+        "   font-size: 8pt;"
+        "   font-weight: bold;"
+        "}"
+        "QPushButton:hover { background-color: rgba(47, 53, 73, 230); border-color: #7aa2f7; }"
+    );
+
+    auto *colorMenu = new QMenu(m_colorBtn);
+    const QVector<QPair<QString, QColor>> colors = {
+        {"Tinta Negra (#111827)", QColor("#111827")},
+        {"Azul Cuaderno (#1e3a8a)", QColor("#1e3a8a")},
+        {"Gris Grafito (#374151)", QColor("#374151")},
+        {"Azul Tokyo (#7aa2f7)", QColor("#7aa2f7")},
+        {"Rojo (#dc2626)", QColor("#dc2626")},
+        {"Verde (#16a34a)", QColor("#16a34a")},
+        {"Blanco Nieve (#ffffff)", QColor("#ffffff")},
+        {"Lavanda (#c0caf5)", QColor("#c0caf5")}
+    };
+
+    for (const auto &c : colors) {
+        auto *act = colorMenu->addAction(c.first);
+        connect(act, &QAction::triggered, this, [this, c]() {
+            setTextColor(c.second);
+        });
+    }
+
+    auto *customAct = colorMenu->addAction("Personalizado...");
+    connect(customAct, &QAction::triggered, this, [this]() {
+        auto *dlg = new QColorDialog(textColor(), m_headerWidget->window());
+        dlg->setWindowTitle("Color del Texto");
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->setOption(QColorDialog::DontUseNativeDialog, true);
+        connect(dlg, &QColorDialog::colorSelected, this, [this](const QColor &c) {
+            if (c.isValid()) setTextColor(c);
+        });
+        dlg->show();
+        dlg->raise();
+        dlg->activateWindow();
+    });
+
+    m_colorBtn->setMenu(colorMenu);
+    headerLayout->addWidget(m_colorBtn);
+
+    headerLayout->addStretch(1);
+
+    m_closeBtn = new QPushButton(m_headerWidget);
+    m_closeBtn->setIcon(AppIcons::get(AppIcons::IconType::Close, QColor("#565f89"), 12));
+    m_closeBtn->setFixedSize(20, 20);
+    m_closeBtn->setCursor(Qt::PointingHandCursor);
+    m_closeBtn->setStyleSheet(
+        "QPushButton {"
+        "   background: transparent;"
+        "   border: none;"
+        "   border-radius: 4px;"
+        "}"
+        "QPushButton:hover { background-color: rgba(247, 118, 142, 200); color: #ffffff; }"
+    );
+    connect(m_closeBtn, &QPushButton::clicked, this, [this]() {
+        if (m_headerWidget) m_headerWidget->hide();
         if (scene()) {
             scene()->removeItem(this);
         }
         emit itemDeleted(this);
     });
+    headerLayout->addWidget(m_closeBtn);
 
-    connect(m_containerWidget, &TextBlockContainerWidget::textChanged, this, &TextBlockItem::blockModified);
-
-    connect(m_containerWidget, &TextBlockContainerWidget::moveDeltaRequested, this, [this](const QPointF &delta) {
-        setPos(this->pos() + delta);
-        emit blockModified();
+    connect(m_styleCombo, &QComboBox::currentIndexChanged, this, [this](int idx) {
+        if (m_containerWidget) {
+            m_containerWidget->setStylePreset(static_cast<TextBlockContainerWidget::StylePreset>(m_styleCombo->itemData(idx).toInt()));
+        }
     });
+
+    m_headerWidget->hide();
+}
+
+void TextBlockItem::setInteractiveMode(bool enable) {
+    m_isInteractiveMode = enable;
+    if (m_containerWidget) {
+        m_containerWidget->setInteractiveMode(enable);
+    }
+
+    setAcceptedMouseButtons(enable ? (Qt::LeftButton | Qt::RightButton) : Qt::NoButton);
+    setAcceptHoverEvents(enable);
+
+    if (!enable) {
+        if (m_headerWidget) m_headerWidget->hide();
+        if (m_containerWidget) m_containerWidget->clearEditorFocus();
+    } else {
+        updateHeaderVisibility();
+    }
+}
+
+void TextBlockItem::updateHeaderVisibility() {
+    if (!m_headerWidget || !m_containerWidget) return;
+
+    if (!m_isInteractiveMode) {
+        m_headerWidget->hide();
+        return;
+    }
+
+    bool shouldShow = isSelected() || hasFocus() || m_containerWidget->isEditorFocused();
+    if (!shouldShow) {
+        m_headerWidget->hide();
+        return;
+    }
+
+    if (scene() && !scene()->views().isEmpty()) {
+        auto *view = scene()->views().first();
+        if (view && view->viewport()) {
+            if (m_headerWidget->parent() != view->viewport()) {
+                m_headerWidget->setParent(view->viewport());
+            }
+
+            QPoint viewPos = view->mapFromScene(pos());
+            int targetX = viewPos.x();
+            int targetY = viewPos.y() - m_headerWidget->height() - 4;
+            if (targetY < 8) {
+                targetY = viewPos.y() + (m_containerWidget ? m_containerWidget->height() : 60) + 4;
+            }
+
+            int targetW = qMax(260, qMin(view->viewport()->width() - 20, m_containerWidget->width()));
+            m_headerWidget->setFixedWidth(targetW);
+            m_headerWidget->move(qBound(10, targetX, view->viewport()->width() - targetW - 10), targetY);
+            m_headerWidget->show();
+            m_headerWidget->raise();
+            return;
+        }
+    }
+
+    m_headerWidget->hide();
+}
+
+QVariant TextBlockItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionHasChanged || change == ItemSelectedHasChanged) {
+        updateHeaderVisibility();
+    }
+    return QGraphicsProxyWidget::itemChange(change, value);
+}
+
+void TextBlockItem::hoverEnterEvent(QGraphicsSceneHoverEvent *event) {
+    if (m_isInteractiveMode) {
+        updateHeaderVisibility();
+    }
+    QGraphicsProxyWidget::hoverEnterEvent(event);
+}
+
+void TextBlockItem::hoverLeaveEvent(QGraphicsSceneHoverEvent *event) {
+    if (m_isInteractiveMode) {
+        updateHeaderVisibility();
+    }
+    QGraphicsProxyWidget::hoverLeaveEvent(event);
 }
 
 QString TextBlockItem::text() const {
@@ -658,6 +651,7 @@ void TextBlockItem::focusEditorAndSelectAll() {
     if (m_containerWidget) {
         m_containerWidget->focusEditorAndSelectAll();
     }
+    updateHeaderVisibility();
 }
 
 QColor TextBlockItem::textColor() const {
@@ -668,6 +662,25 @@ void TextBlockItem::setTextColor(const QColor &color) {
     if (m_containerWidget) {
         m_containerWidget->setTextColor(color);
     }
+    if (m_colorBtn) {
+        m_colorBtn->setIcon(AppIcons::get(AppIcons::IconType::Palette, color, 13));
+    }
+}
+
+TextBlockContainerWidget::StylePreset TextBlockItem::stylePreset() const {
+    return m_containerWidget ? m_containerWidget->stylePreset() : TextBlockContainerWidget::BodyText;
+}
+
+void TextBlockItem::setStylePreset(TextBlockContainerWidget::StylePreset preset) {
+    if (m_containerWidget) {
+        m_containerWidget->setStylePreset(preset);
+    }
+    if (m_styleCombo) {
+        int idx = m_styleCombo->findData(preset);
+        if (idx >= 0 && m_styleCombo->currentIndex() != idx) {
+            m_styleCombo->setCurrentIndex(idx);
+        }
+    }
 }
 
 QString TextBlockItem::serialize() const {
@@ -677,6 +690,13 @@ QString TextBlockItem::serialize() const {
 void TextBlockItem::deserialize(const QString &data) {
     if (m_containerWidget) {
         m_containerWidget->deserialize(data);
+    }
+    if (m_styleCombo && m_containerWidget) {
+        int idx = m_styleCombo->findData(m_containerWidget->stylePreset());
+        if (idx >= 0) m_styleCombo->setCurrentIndex(idx);
+    }
+    if (m_colorBtn && m_containerWidget) {
+        m_colorBtn->setIcon(AppIcons::get(AppIcons::IconType::Palette, m_containerWidget->textColor(), 13));
     }
 }
 

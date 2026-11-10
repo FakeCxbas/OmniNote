@@ -36,10 +36,10 @@ class TextBlockContainerWidget : public QWidget {
 
 public:
     enum StylePreset {
-        TitleH1 = 0,     // 24pt, bold
-        SubtitleH2 = 1,  // 18pt, bold
-        HeadingH3 = 2,   // 14pt, bold
-        BodyText = 3     // 11pt, regular
+        TitleH1 = 0,     // 28pt, bold (2 rows)
+        SubtitleH2 = 1,  // 20pt, bold (1.5 rows)
+        HeadingH3 = 2,   // 16pt, bold (1 row)
+        BodyText = 3     // 14pt, regular (1 row)
     };
 
     enum ResizeHandle {
@@ -64,14 +64,19 @@ public:
     void setContainerSize(const QSize &s);
 
     void focusEditorAndSelectAll();
+    void clearEditorFocus();
+    bool isEditorFocused() const { return m_isFocused; }
+
+    void setInteractiveMode(bool enable);
+    bool isInteractiveMode() const { return m_isInteractiveMode; }
 
     QString serialize() const;
     void deserialize(const QString &jsonStr);
 
 signals:
     void textChanged();
-    void deleteRequested();
     void moveDeltaRequested(const QPointF &delta);
+    void interactionStateChanged();
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -84,13 +89,8 @@ protected:
 
 private:
     void applyTextStyle();
-    void updateControlsVisibility();
     ResizeHandle hitTestResizeHandle(const QPoint &pos) const;
 
-    QWidget *m_headerWidget{nullptr};
-    QComboBox *m_styleCombo{nullptr};
-    QPushButton *m_colorBtn{nullptr};
-    QPushButton *m_closeBtn{nullptr};
     TextEditorWidget *m_editor{nullptr};
 
     StylePreset m_stylePreset{BodyText};
@@ -98,9 +98,10 @@ private:
 
     ResizeHandle m_activeResizeHandle{NoHandle};
     ResizeHandle m_hoverResizeHandle{NoHandle};
-    bool m_draggingHeader{false};
+    bool m_draggingItem{false};
     bool m_isHovered{false};
     bool m_isFocused{false};
+    bool m_isInteractiveMode{false};
 
     QPoint m_dragStartPos;
     QSize m_dragStartSize;
@@ -114,7 +115,7 @@ public:
     int type() const override { return Type; }
 
     explicit TextBlockItem(const QPointF &initialPos = QPointF(100, 100), QGraphicsItem *parent = nullptr);
-    ~TextBlockItem() override = default;
+    ~TextBlockItem() override;
 
     QString text() const;
     void setText(const QString &text);
@@ -123,6 +124,13 @@ public:
     QColor textColor() const;
     void setTextColor(const QColor &color);
 
+    TextBlockContainerWidget::StylePreset stylePreset() const;
+    void setStylePreset(TextBlockContainerWidget::StylePreset preset);
+
+    void setInteractiveMode(bool enable);
+    bool isInteractiveMode() const { return m_isInteractiveMode; }
+    void updateHeaderVisibility();
+
     QString serialize() const;
     void deserialize(const QString &data);
 
@@ -130,8 +138,21 @@ signals:
     void itemDeleted(TextBlockItem *item);
     void blockModified();
 
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+    void hoverEnterEvent(QGraphicsSceneHoverEvent *event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
+
 private:
-    TextBlockContainerWidget *m_containerWidget;
+    void setupFloatingHeader();
+
+    TextBlockContainerWidget *m_containerWidget{nullptr};
+    QWidget *m_headerWidget{nullptr};
+    QComboBox *m_styleCombo{nullptr};
+    QPushButton *m_colorBtn{nullptr};
+    QPushButton *m_closeBtn{nullptr};
+
+    bool m_isInteractiveMode{false};
 };
 
 } // namespace OmniNote

@@ -184,6 +184,15 @@ void VectorCanvasScene::clearPdfBackground() {
 void VectorCanvasScene::setCurrentTool(ToolType tool) {
     if (m_currentTool != tool) {
         m_currentTool = tool;
+
+        const bool isCursorOrText = (tool == ToolType::Cursor || tool == ToolType::Text);
+        for (QGraphicsItem *it : items()) {
+            if (it->type() == TextBlockItem::Type) {
+                auto *tb = static_cast<TextBlockItem *>(it);
+                tb->setInteractiveMode(isCursorOrText);
+            }
+        }
+
         emit toolChanged(tool);
     }
 }
@@ -235,6 +244,17 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
             invalidate(sceneRect(), ForegroundLayer);
             update();
         }
+    }
+
+    if (activeTool == ToolType::Cursor) {
+        QGraphicsItem *topItem = itemAt(clampedPos, QTransform());
+        if (!topItem || topItem->type() == StrokeItem::Type) {
+            clearSelection();
+            emit selectionStateChanged(false);
+            invalidate(sceneRect(), ForegroundLayer);
+            update();
+        }
+        return;
     }
 
     if (activeTool == ToolType::Eraser) {

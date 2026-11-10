@@ -139,6 +139,7 @@ private:
     QAction *m_undoAction{nullptr};
     QAction *m_redoAction{nullptr};
     QActionGroup *m_toolActionGroup{nullptr};
+    QAction *m_cursorAction{nullptr};
     QAction *m_penAction{nullptr};
     QAction *m_highlighterAction{nullptr};
     QAction *m_eraserAction{nullptr};

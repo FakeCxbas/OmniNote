@@ -268,6 +268,13 @@ void MainWindow::setupToolbars() {
     m_toolActionGroup = new QActionGroup(this);
     m_toolActionGroup->setExclusive(true);
 
+    m_cursorAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Cursor, QColor("#7aa2f7"), 22), "Cursor (V)");
+    m_cursorAction->setToolTip("Cursor / Puntero (V) — Tocar, seleccionar, mover y editar bloques y texto sin que la pluma interfiera");
+    m_cursorAction->setCheckable(true);
+    m_cursorAction->setShortcut(QKeySequence(Qt::Key_V));
+    m_cursorAction->setData(static_cast<int>(ToolType::Cursor));
+    m_toolActionGroup->addAction(m_cursorAction);
+
     m_penAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Pen, QColor("#7aa2f7"), 22), "Lápiz (P)");
     m_penAction->setToolTip("Lápiz (P) — Escritura y dibujo a mano alzada con presión y estabilización");
     m_penAction->setCheckable(true);
@@ -548,6 +555,32 @@ void MainWindow::onToolTriggered(QAction *action) {
     }
 
     m_currentScene->setCurrentTool(tool);
+
+    if (m_tipLabel) {
+        switch (tool) {
+        case ToolType::Cursor:
+            m_tipLabel->setText(" Modo: Cursor ");
+            break;
+        case ToolType::Pen:
+            m_tipLabel->setText(" Modo: Lápiz ");
+            break;
+        case ToolType::Highlighter:
+            m_tipLabel->setText(" Modo: Resaltador ");
+            break;
+        case ToolType::Eraser:
+            m_tipLabel->setText(" Modo: Borrador ");
+            break;
+        case ToolType::Lasso:
+            m_tipLabel->setText(" Modo: Lazo ");
+            break;
+        case ToolType::Text:
+            m_tipLabel->setText(" Modo: Texto ");
+            break;
+        default:
+            m_tipLabel->setText(" Modo: Formas ");
+            break;
+        }
+    }
 }
 
 void MainWindow::onShapeTypeChanged(int /* index */) {
@@ -2076,6 +2109,13 @@ void MainWindow::updatePointerTipDisplay(bool isEraser) {
     if (m_tipLabel) {
         if (isEraser) {
             m_tipLabel->setText(" Modo: Borrador ");
+        } else if (m_currentScene) {
+            ToolType t = m_currentScene->currentTool();
+            if (t == ToolType::Cursor) m_tipLabel->setText(" Modo: Cursor ");
+            else if (t == ToolType::Highlighter) m_tipLabel->setText(" Modo: Resaltador ");
+            else if (t == ToolType::Lasso) m_tipLabel->setText(" Modo: Lazo ");
+            else if (t == ToolType::Text) m_tipLabel->setText(" Modo: Texto ");
+            else m_tipLabel->setText(" Modo: Lápiz ");
         } else {
             m_tipLabel->setText(" Modo: Lápiz ");
         }
