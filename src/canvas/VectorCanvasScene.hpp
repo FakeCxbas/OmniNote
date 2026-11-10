@@ -144,6 +144,7 @@ private:
     QVector<StrokePoint> m_activePoints;
     StrokeItem *m_activeStrokeItem{nullptr};
     QPointF m_lastInputPos;
+    qreal m_lastInputPressure{0.5};
     class VirtualRulerItem *m_activeRuler{nullptr};
 
     // Lasso selection

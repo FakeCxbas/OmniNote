@@ -631,7 +631,7 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
     // Viewport-relative coordinates from QTabletEvent with true sub-pixel floating point precision
     QPointF scenePos = mapToSceneF(event->position());
 
-    qreal pressure = qBound(0.05, event->pressure(), 1.0);
+    qreal pressure = qBound(0.0, event->pressure(), 1.0);
     qreal tx = event->xTilt();
     qreal ty = event->yTilt();
 
