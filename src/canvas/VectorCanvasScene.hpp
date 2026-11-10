@@ -43,6 +43,7 @@ public:
     QColor deskColor() const;
     QColor borderColor() const;
     QColor shadowColor() const;
+    qreal gridRowHeight() const;
 
     QString headerTitle() const { return m_headerTitle; }
     void setHeaderTitle(const QString &title);

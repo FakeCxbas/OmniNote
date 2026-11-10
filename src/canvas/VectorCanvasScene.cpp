@@ -1,6 +1,11 @@
 #include "VectorCanvasScene.hpp"
 #include "UndoCommands.hpp"
 #include "VirtualRulerItem.hpp"
+#include "../stem/ImageBlockItem.hpp"
+#include "../stem/FormulaBlockItem.hpp"
+#include "../stem/TextBlockItem.hpp"
+#include "../stem/CodeBlockItem.hpp"
+#include "../stem/FunctionPlotItem.hpp"
 #include <QPainter>
 #include <QtMath>
 #include <QGraphicsView>
@@ -121,6 +126,19 @@ QColor VectorCanvasScene::shadowColor() const {
     return QColor(0, 0, 0, 180);
 }
 
+qreal VectorCanvasScene::gridRowHeight() const {
+    if (m_bgType == BackgroundType::CanvaGrid) {
+        return (m_pageSize.height() - 88.0 - 148.0) / 48.0; // 31.625 px
+    }
+    if (m_bgType == BackgroundType::CalculusGrid) {
+        return 25.0;
+    }
+    if (m_bgType == BackgroundType::EngineeringMillimeter) {
+        return 20.0;
+    }
+    return 31.625;
+}
+
 void VectorCanvasScene::setHeaderTitle(const QString &title) {
     if (m_headerTitle != title) {
         m_headerTitle = title;
@@ -199,6 +217,24 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
     if (isHeaderTitleHit(clampedPos) && activeTool != ToolType::Eraser) {
         emit headerTitleEditRequested();
         return;
+    }
+
+    // Deselect any selected items immediately if clicking/drawing outside them
+    if (activeTool != ToolType::Lasso && !selectedItems().isEmpty()) {
+        bool hitSelectedItem = false;
+        const auto itemsUnder = items(clampedPos);
+        for (auto *it : itemsUnder) {
+            if (it->isSelected()) {
+                hitSelectedItem = true;
+                break;
+            }
+        }
+        if (!hitSelectedItem) {
+            clearSelection();
+            emit selectionStateChanged(false);
+            invalidate(sceneRect(), ForegroundLayer);
+            update();
+        }
     }
 
     if (activeTool == ToolType::Eraser) {
@@ -1041,7 +1077,18 @@ void VectorCanvasScene::drawForeground(QPainter *painter, const QRectF & /*rect*
     }
 
     QRectF sel = selectionBoundingRect();
-    if (!sel.isEmpty()) {
+    bool hasOnlySingleStemBlock = false;
+    const auto selItems = selectedItems();
+    if (selItems.size() == 1) {
+        int t = selItems.first()->type();
+        if (t == ImageBlockItem::Type || t == TextBlockItem::Type ||
+            t == FormulaBlockItem::Type || t == FunctionPlotItem::Type ||
+            t == CodeBlockItem::Type) {
+            hasOnlySingleStemBlock = true;
+        }
+    }
+
+    if (!sel.isEmpty() && !hasOnlySingleStemBlock) {
         QRectF box = sel.adjusted(-8, -8, 8, 8);
 
         // 1. Translucent selection wash

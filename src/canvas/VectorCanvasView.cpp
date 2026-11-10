@@ -367,6 +367,23 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
         }
     }
 
+    // Direct canvas click: if clicking outside of any selected items, deselect all immediately
+    if (m_canvasScene && !m_canvasScene->selectedItems().isEmpty()) {
+        const auto itemsAtPos = m_canvasScene->items(scenePos);
+        bool hitSelected = false;
+        for (auto *it : itemsAtPos) {
+            if (it->isSelected()) {
+                hitSelected = true;
+                break;
+            }
+        }
+        if (!hitSelected) {
+            m_canvasScene->clearSelection();
+            m_canvasScene->invalidate(m_canvasScene->sceneRect(), QGraphicsScene::ForegroundLayer);
+            m_canvasScene->update();
+        }
+    }
+
     // Clear focus from any embedded code editor when clicking on the canvas
     if (m_canvasScene && m_canvasScene->focusItem()) {
         m_canvasScene->clearFocus();
