@@ -9,6 +9,8 @@
 #include <QFontMetrics>
 #include <QGraphicsScene>
 #include <QCursor>
+#include <QTextBlock>
+#include <QTextDocument>
 
 namespace OmniNote {
 
@@ -73,16 +75,15 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
     setFocusPolicy(Qt::StrongFocus);
 
     auto *mainLayout = new QVBoxLayout(this);
-    // Margins leave space for borders and resize grips outside the editor
-    mainLayout->setContentsMargins(6, 4, 10, 10);
+    mainLayout->setContentsMargins(4, 2, 4, 4);
     mainLayout->setSpacing(2);
 
-    // Header bar container widget (retains size when hidden so text never jumps)
+    // Header bar container widget (collapses when hidden so text aligns right at the top)
     m_headerWidget = new QWidget(this);
     m_headerWidget->installEventFilter(this);
     m_headerWidget->setCursor(Qt::SizeAllCursor);
     auto sp = m_headerWidget->sizePolicy();
-    sp.setRetainSizeWhenHidden(true);
+    sp.setRetainSizeWhenHidden(false);
     m_headerWidget->setSizePolicy(sp);
 
     auto *headerLayout = new QHBoxLayout(m_headerWidget);
@@ -95,10 +96,10 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
     headerLayout->addWidget(iconLabel);
 
     m_styleCombo = new QComboBox(m_headerWidget);
+    m_styleCombo->addItem("Texto Normal", BodyText);
     m_styleCombo->addItem("Título (H1)", TitleH1);
     m_styleCombo->addItem("Subtítulo (H2)", SubtitleH2);
     m_styleCombo->addItem("Encabezado (H3)", HeadingH3);
-    m_styleCombo->addItem("Texto Normal", BodyText);
     m_styleCombo->setStyleSheet(
         "QComboBox {"
         "   background-color: rgba(36, 40, 59, 180);"
@@ -122,7 +123,7 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
     headerLayout->addWidget(m_styleCombo);
 
     m_colorBtn = new QPushButton("Color", m_headerWidget);
-    m_colorBtn->setIcon(AppIcons::get(AppIcons::IconType::Palette, QColor("#7aa2f7"), 13));
+    m_colorBtn->setIcon(AppIcons::get(AppIcons::IconType::Palette, m_textColor, 13));
     m_colorBtn->setStyleSheet(
         "QPushButton {"
         "   background-color: rgba(36, 40, 59, 180);"
@@ -138,14 +139,14 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
 
     auto *colorMenu = new QMenu(m_colorBtn);
     const QVector<QPair<QString, QColor>> colors = {
+        {"Tinta Negra (#111827)", QColor("#111827")},
+        {"Azul Cuaderno (#1e3a8a)", QColor("#1e3a8a")},
+        {"Gris Grafito (#374151)", QColor("#374151")},
         {"Azul Tokyo (#7aa2f7)", QColor("#7aa2f7")},
+        {"Rojo (#dc2626)", QColor("#dc2626")},
+        {"Verde (#16a34a)", QColor("#16a34a")},
         {"Blanco Nieve (#ffffff)", QColor("#ffffff")},
-        {"Lavanda (#c0caf5)", QColor("#c0caf5")},
-        {"Verde Neón (#9ece6a)", QColor("#9ece6a")},
-        {"Ámbar (#e0af68)", QColor("#e0af68")},
-        {"Cian (#7dcfff)", QColor("#7dcfff")},
-        {"Púrpura (#bb9af7)", QColor("#bb9af7")},
-        {"Coral (#f7768e)", QColor("#f7768e")}
+        {"Lavanda (#c0caf5)", QColor("#c0caf5")}
     };
 
     for (const auto &c : colors) {
@@ -207,7 +208,26 @@ TextBlockContainerWidget::TextBlockContainerWidget(QWidget *parent) : QWidget(pa
     connect(m_styleCombo, &QComboBox::currentIndexChanged, this, [this](int idx) {
         setStylePreset(static_cast<StylePreset>(m_styleCombo->itemData(idx).toInt()));
     });
-    connect(m_editor, &TextEditorWidget::contentChanged, this, &TextBlockContainerWidget::textChanged);
+    connect(m_editor, &TextEditorWidget::contentChanged, this, [this]() {
+        if (m_editor && m_editor->document()) {
+            qreal rowHeight = 31.625;
+            if (m_stylePreset == TitleH1) rowHeight = 63.25;
+            else if (m_stylePreset == SubtitleH2) rowHeight = 47.4;
+
+            QTextCursor cursor = m_editor->textCursor();
+            QTextBlock block = cursor.block();
+            if (block.isValid()) {
+                QTextBlockFormat bf = block.blockFormat();
+                if (std::abs(bf.lineHeight() - rowHeight) > 0.1) {
+                    bf.setLineHeight(rowHeight, QTextBlockFormat::FixedHeight);
+                    bf.setTopMargin(0);
+                    bf.setBottomMargin(0);
+                    cursor.setBlockFormat(bf);
+                }
+            }
+        }
+        emit textChanged();
+    });
     connect(m_editor, &TextEditorWidget::focusChanged, this, [this](bool f) {
         m_isFocused = f;
         updateControlsVisibility();
@@ -224,6 +244,7 @@ QString TextBlockContainerWidget::text() const {
 void TextBlockContainerWidget::setText(const QString &text) {
     if (m_editor) {
         m_editor->setPlainText(text);
+        applyTextStyle();
     }
 }
 
@@ -271,7 +292,7 @@ void TextBlockContainerWidget::setContainerSize(const QSize &s) {
 void TextBlockContainerWidget::applyTextStyle() {
     if (!m_editor) return;
 
-    QFont f("Inter", 15);
+    QFont f("Inter", 14);
     f.setStyleHint(QFont::SansSerif);
 
     qreal rowHeight = 31.625; // Exact 5mm notebook square height (CanvaGrid / CalculusGrid)
@@ -284,20 +305,20 @@ void TextBlockContainerWidget::applyTextStyle() {
         rowHeight = 63.25; // 2 grid rows
         break;
     case SubtitleH2:
-        f.setPointSize(22);
+        f.setPointSize(20);
         f.setBold(true);
         f.setWeight(QFont::DemiBold);
         rowHeight = 47.4; // 1.5 grid rows
         break;
     case HeadingH3:
-        f.setPointSize(18);
+        f.setPointSize(16);
         f.setBold(true);
         f.setWeight(QFont::Medium);
         rowHeight = 31.625; // 1 grid row
         break;
     case BodyText:
     default:
-        f.setPointSize(15);
+        f.setPointSize(14);
         f.setBold(false);
         f.setWeight(QFont::Normal);
         rowHeight = 31.625; // Exact 1 grid row (5mm notebook square)
@@ -309,11 +330,16 @@ void TextBlockContainerWidget::applyTextStyle() {
     // Synchronize line-height so each line of written text matches the notebook rows
     QTextDocument *doc = m_editor->document();
     if (doc) {
-        QTextCursor cursor(doc);
-        cursor.select(QTextCursor::Document);
+        doc->setDefaultFont(f);
+        doc->setDocumentMargin(2);
         QTextBlockFormat blockFormat;
         blockFormat.setLineHeight(rowHeight, QTextBlockFormat::FixedHeight);
-        cursor.mergeBlockFormat(blockFormat);
+        blockFormat.setTopMargin(0);
+        blockFormat.setBottomMargin(0);
+        for (QTextBlock it = doc->begin(); it != doc->end(); it = it.next()) {
+            QTextCursor cursor(it);
+            cursor.setBlockFormat(blockFormat);
+        }
     }
 
     m_editor->setStyleSheet(QString(
@@ -321,7 +347,7 @@ void TextBlockContainerWidget::applyTextStyle() {
         "   background-color: transparent;"
         "   color: %1;"
         "   border: none;"
-        "   padding: 2px 4px;"
+        "   padding: 0px 4px;"
         "   line-height: %2px;"
         "   selection-background-color: #2b5c9e;"
         "   selection-color: #ffffff;"

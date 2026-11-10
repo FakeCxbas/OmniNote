@@ -93,8 +93,8 @@ private:
     QPushButton *m_closeBtn{nullptr};
     TextEditorWidget *m_editor{nullptr};
 
-    StylePreset m_stylePreset{TitleH1};
-    QColor m_textColor{QColor("#7aa2f7")};
+    StylePreset m_stylePreset{BodyText};
+    QColor m_textColor{QColor("#111827")};
 
     ResizeHandle m_activeResizeHandle{NoHandle};
     ResizeHandle m_hoverResizeHandle{NoHandle};
