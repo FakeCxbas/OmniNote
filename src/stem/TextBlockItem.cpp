@@ -271,40 +271,58 @@ void TextBlockContainerWidget::setContainerSize(const QSize &s) {
 void TextBlockContainerWidget::applyTextStyle() {
     if (!m_editor) return;
 
-    QFont f("Inter", 12);
+    QFont f("Inter", 15);
     f.setStyleHint(QFont::SansSerif);
+
+    qreal rowHeight = 31.625; // Exact 5mm notebook square height (CanvaGrid / CalculusGrid)
 
     switch (m_stylePreset) {
     case TitleH1:
-        f.setPointSize(22);
+        f.setPointSize(28);
         f.setBold(true);
         f.setWeight(QFont::Bold);
+        rowHeight = 63.25; // 2 grid rows
         break;
     case SubtitleH2:
-        f.setPointSize(16);
+        f.setPointSize(22);
         f.setBold(true);
         f.setWeight(QFont::DemiBold);
+        rowHeight = 47.4; // 1.5 grid rows
         break;
     case HeadingH3:
-        f.setPointSize(13);
+        f.setPointSize(18);
         f.setBold(true);
         f.setWeight(QFont::Medium);
+        rowHeight = 31.625; // 1 grid row
         break;
     case BodyText:
     default:
-        f.setPointSize(11);
+        f.setPointSize(15);
         f.setBold(false);
         f.setWeight(QFont::Normal);
+        rowHeight = 31.625; // Exact 1 grid row (5mm notebook square)
         break;
     }
 
     m_editor->setFont(f);
+
+    // Synchronize line-height so each line of written text matches the notebook rows
+    QTextDocument *doc = m_editor->document();
+    if (doc) {
+        QTextCursor cursor(doc);
+        cursor.select(QTextCursor::Document);
+        QTextBlockFormat blockFormat;
+        blockFormat.setLineHeight(rowHeight, QTextBlockFormat::FixedHeight);
+        cursor.mergeBlockFormat(blockFormat);
+    }
+
     m_editor->setStyleSheet(QString(
         "QTextEdit {"
         "   background-color: transparent;"
         "   color: %1;"
         "   border: none;"
-        "   padding: 4px;"
+        "   padding: 2px 4px;"
+        "   line-height: %2px;"
         "   selection-background-color: #2b5c9e;"
         "   selection-color: #ffffff;"
         "}"
@@ -316,7 +334,7 @@ void TextBlockContainerWidget::applyTextStyle() {
         "   background: rgba(59, 66, 97, 180);"
         "   border-radius: 2px;"
         "}"
-    ).arg(m_textColor.name()));
+    ).arg(m_textColor.name()).arg(rowHeight));
 }
 
 TextBlockContainerWidget::ResizeHandle TextBlockContainerWidget::hitTestResizeHandle(const QPoint &pos) const {

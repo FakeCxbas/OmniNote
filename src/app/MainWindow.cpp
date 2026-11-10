@@ -671,6 +671,12 @@ void MainWindow::onInsertTextBlockAt(const QPointF &pos) {
     if (!m_currentScene) return;
 
     QPointF targetPos = m_currentScene->clampToPage(pos, 20.0);
+    // Align to the nearest grid row of the current sheet
+    qreal rowH = m_currentScene->gridRowHeight();
+    qreal originY = (m_currentScene->backgroundType() == BackgroundType::CanvaGrid) ? 148.0 : 0.0;
+    qreal snappedY = originY + std::round((targetPos.y() - originY) / rowH) * rowH;
+    targetPos.setY(snappedY);
+
     auto *textItem = new TextBlockItem(targetPos);
     textItem->setText("Escribe tu texto...");
     connect(textItem, &TextBlockItem::blockModified, this, &MainWindow::markModified);

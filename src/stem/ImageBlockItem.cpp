@@ -171,27 +171,35 @@ void ImageBlockItem::updatePixmap() {
 }
 
 QRectF ImageBlockItem::boundingRect() const {
-    const qreal pad = 12.0; // Margin for handles and border glow
-    return m_rect.adjusted(-pad, -pad, pad, pad);
+    const qreal pad = 12.0;
+    return m_rect.adjusted(-pad, -38.0, pad, 38.0);
+}
+
+QRectF ImageBlockItem::headerRect() const {
+    const qreal h = 26.0;
+    qreal top = m_rect.top() - h - 5.0; // Float 5px directly above image
+    if (scene() && (pos().y() + top < 8.0)) {
+        top = m_rect.bottom() + 6.0; // Flip below if near top of page
+    }
+    return QRectF(m_rect.left(), top, m_rect.width(), h);
 }
 
 QRectF ImageBlockItem::closeButtonRect() const {
-    return QRectF(m_rect.right() - 25.0, m_rect.top() + 5.0, 20.0, 20.0);
+    QRectF hr = headerRect();
+    return QRectF(hr.right() - 24.0, hr.top() + 2.0, 20.0, 20.0);
 }
 
 QRectF ImageBlockItem::magicButtonRect() const {
     const qreal btnW = m_backgroundRemoved ? 94.0 : 106.0;
-    return QRectF(m_rect.left() + 6.0, m_rect.top() + 5.0, btnW, 22.0);
-}
-
-QRectF ImageBlockItem::headerRect() const {
-    return QRectF(m_rect.left(), m_rect.top(), m_rect.width(), 32.0);
+    QRectF hr = headerRect();
+    return QRectF(hr.left() + 4.0, hr.top() + 2.0, btnW, 22.0);
 }
 
 QRectF ImageBlockItem::dragHandleRect() const {
+    QRectF hr = headerRect();
     const qreal handleW = 76.0;
     const qreal handleH = 22.0;
-    qreal left = m_rect.left() + (m_rect.width() - handleW) * 0.5;
+    qreal left = hr.left() + (hr.width() - handleW) * 0.5;
     qreal minLeft = magicButtonRect().right() + 6.0;
     qreal maxRight = closeButtonRect().left() - 6.0;
     left = qMax(minLeft, left);
@@ -199,7 +207,7 @@ QRectF ImageBlockItem::dragHandleRect() const {
     if (left + w > maxRight) {
         w = qMax(28.0, maxRight - left);
     }
-    return QRectF(left, m_rect.top() + 5.0, w, handleH);
+    return QRectF(left, hr.top() + 2.0, w, handleH);
 }
 
 bool ImageBlockItem::isBorderHit(const QPointF &localPos, qreal tolerance) const {
@@ -271,12 +279,14 @@ void ImageBlockItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
     }
     painter->restore();
 
-    // 3. Subtle Outer Border (Tokyo Night Blue / Cyan)
-    QColor borderColor = isSelected() ? QColor("#7aa2f7") : (showControls ? QColor("#7dcfff") : QColor(47, 53, 73, 160));
-    qreal borderWidth = isSelected() ? 2.0 : (showControls ? 1.5 : 1.0);
-    painter->setPen(QPen(borderColor, borderWidth, isSelected() ? Qt::DashLine : Qt::SolidLine));
-    painter->setBrush(Qt::NoBrush);
-    painter->drawRoundedRect(m_rect, 8.0, 8.0);
+    // 3. Selection / Hover Border (Only visible when selected or hovered)
+    if (showControls) {
+        QColor borderColor = isSelected() ? QColor("#7aa2f7") : QColor("#7dcfff");
+        qreal borderWidth = isSelected() ? 1.8 : 1.2;
+        painter->setPen(QPen(borderColor, borderWidth, isSelected() ? Qt::DashLine : Qt::SolidLine));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRoundedRect(m_rect, 8.0, 8.0);
+    }
 
     // 4. Interactive Corner Handles (when hovered or selected)
     if (showControls) {

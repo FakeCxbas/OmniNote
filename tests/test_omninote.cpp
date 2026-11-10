@@ -757,14 +757,14 @@ void testImageBlockItemAndSerialization() {
     assert(imgItem.isControlHit(QPointF(0, 0)));
     assert(!imgItem.dragHandleRect().isEmpty());
     assert(imgItem.isControlHit(imgItem.dragHandleRect().center()));
-    assert(imgItem.isControlHit(QPointF(imgItem.width() * 0.5, 10.0))); // Header bar
+    assert(imgItem.isControlHit(imgItem.headerRect().center())); // Header bar floats above image
 
     // Center of unselected image should allow stylus drawing if not selected
-    assert(!imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.75)));
+    assert(!imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.5)));
 
     // When selected, the entire body becomes interactive for moving/dragging
     imgItem.setSelected(true);
-    assert(imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.75)));
+    assert(imgItem.isControlHit(QPointF(imgItem.width() * 0.5, imgItem.height() * 0.5)));
     imgItem.setSelected(false);
 
     // 3. Serialize to JSON
@@ -788,7 +788,7 @@ void testImageBlockItemAndSerialization() {
 
     ImageBlockItem mathItem(mathSnippet, QPointF(200, 200));
     assert(!mathItem.isBackgroundRemoved());
-    assert(mathItem.isControlHit(QPointF(10, 10))); // Magic button hit test
+    assert(mathItem.isControlHit(mathItem.magicButtonRect().center())); // Magic button hit test
 
     mathItem.toggleBackgroundRemoval();
     assert(mathItem.isBackgroundRemoved());
@@ -812,7 +812,21 @@ void testImageBlockItemAndSerialization() {
     assert(!mathRestored.isBackgroundRemoved());
     assert(mathRestored.image().pixelColor(0, 0).alpha() == 255);
 
-    std::cout << "  ✓ ImageBlockItem aspect scaling, handle hit-testing, Canva background remover & base64 persistence passed!" << std::endl;
+    // 6. Test automatic click-outside deselection and grid row height
+    VectorCanvasScene scene(1240, 1754);
+    scene.setBackgroundType(BackgroundType::CanvaGrid);
+    assert(std::abs(scene.gridRowHeight() - 31.625) < 0.01);
+
+    auto *testSceneItem = new ImageBlockItem(testImg, QPointF(100, 100));
+    scene.addItem(testSceneItem);
+    testSceneItem->setSelected(true);
+    assert(!scene.selectedItems().isEmpty());
+
+    // Clicking outside on the canvas with the pen tool deselects immediately
+    scene.handlePointerPress(QPointF(500, 500), 0.5);
+    assert(scene.selectedItems().isEmpty());
+
+    std::cout << "  ✓ ImageBlockItem aspect scaling, handle hit-testing, Canva background remover, deselection & grid alignment passed!" << std::endl;
 }
 
 void testVirtualRulerItemAndSnapping() {
