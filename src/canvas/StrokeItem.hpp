@@ -19,7 +19,8 @@ enum class ToolType {
     ShapeEllipse = 6,
     ShapeAxes2D = 7,
     ShapeAxes3D = 8,
-    Text = 9
+    Text = 9,
+    Cursor = 10
 };
 
 class StrokeItem : public QGraphicsItem {

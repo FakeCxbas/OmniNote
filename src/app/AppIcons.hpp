@@ -48,7 +48,8 @@ public:
         Cloud,
         Help,
         Group,
-        Ungroup
+        Ungroup,
+        Cursor
     };
 
     static QIcon get(IconType type, const QColor &color = QColor("#c0caf5"), int size = 20);

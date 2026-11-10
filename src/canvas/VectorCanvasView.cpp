@@ -191,9 +191,11 @@ void VectorCanvasView::drawBackground(QPainter *painter, const QRectF &rect) {
 bool VectorCanvasView::shouldForwardToSceneWidgets(const QPointF &scenePos) const {
     if (!m_canvasScene) return false;
 
-    // In Lasso mode, the canvas handles lasso selection, moving selected items, and handle scaling.
-    // Do not forward mouse clicks on canvas items to child widgets during Lasso mode.
-    if (m_canvasScene->currentTool() == ToolType::Lasso) {
+    // Only forward pointer events to scene widgets when in Cursor or Text tool mode!
+    // In Pen, Highlighter, Eraser, Lasso, or Shapes mode, the stylus/pen must draw directly
+    // on the canvas without widgets intercepting or reacting to strokes.
+    ToolType tool = m_canvasScene->currentTool();
+    if (tool != ToolType::Cursor && tool != ToolType::Text) {
         return false;
     }
 
@@ -499,8 +501,8 @@ void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
         return;
     }
 
-    // Dynamic cursor over lasso selection handles
-    if (m_canvasScene && m_canvasScene->currentTool() == ToolType::Lasso && !m_canvasScene->selectedItems().isEmpty()) {
+    // Dynamic cursor over selection handles
+    if (m_canvasScene && (m_canvasScene->currentTool() == ToolType::Lasso || m_canvasScene->currentTool() == ToolType::Cursor) && !m_canvasScene->selectedItems().isEmpty()) {
         auto h = m_canvasScene->hitTestSelectionHandle(scenePos);
         if (h == VectorCanvasScene::SelectionHandle::TopLeft || h == VectorCanvasScene::SelectionHandle::BottomRight) {
             viewport()->setCursor(Qt::SizeFDiagCursor);
