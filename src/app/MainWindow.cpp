@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 #include "HomeHubView.hpp"
+#include "ExportPdfDialog.hpp"
 #include "ThemeManager.hpp"
 #include "AppIcons.hpp"
 #include <QStackedWidget>
@@ -1073,9 +1074,45 @@ void MainWindow::onImportPdf() {
 void MainWindow::onExportPdf() {
     if (!m_currentScene) return;
 
-    onSaveCurrentPage();
+    if (m_hasUnsavedChanges && m_currentPageId > 0) {
+        onSaveCurrentPage();
+    }
 
-    QString path = QFileDialog::getSaveFileName(this, "Exportar Cuaderno a PDF", QString(), "Documentos PDF (*.pdf)");
+    QVector<PageRecord> availablePages;
+    if (m_navMode == ModeStandaloneSheets) {
+        availablePages = m_storage.getStandalonePages();
+    } else if (m_currentNotebookId > 0) {
+        availablePages = m_storage.getPages(m_currentNotebookId);
+    }
+
+    if (availablePages.isEmpty() && m_currentPageId > 0) {
+        PageRecord pr;
+        pr.id = m_currentPageId;
+        pr.pageNumber = 1;
+        pr.title = m_currentScene->headerTitle();
+        pr.backgroundType = static_cast<int>(m_currentScene->backgroundType());
+        pr.width = m_currentScene->sceneRect().width();
+        pr.height = m_currentScene->sceneRect().height();
+        availablePages.append(pr);
+    }
+
+    QString nbTitle = (m_navMode == ModeStandaloneSheets) ? "Hojas Sueltas" : m_storage.getNotebookTitle(m_currentNotebookId);
+
+    ExportPdfDialog dlg(availablePages, m_currentPageId, nbTitle, this);
+    if (dlg.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    auto pagesToExport = dlg.selectedPages();
+    if (pagesToExport.isEmpty()) {
+        QMessageBox::warning(this, "Sin páginas", "No se seleccionó ninguna página para exportar.");
+        return;
+    }
+
+    QString docsDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString defaultPath = QDir(docsDir).filePath(dlg.suggestedFileName());
+
+    QString path = QFileDialog::getSaveFileName(this, "Guardar Documento PDF", defaultPath, "Documentos PDF (*.pdf)");
     if (path.isEmpty()) return;
 
     if (!path.endsWith(".pdf", Qt::CaseInsensitive)) {
@@ -1085,9 +1122,10 @@ void MainWindow::onExportPdf() {
     std::vector<std::unique_ptr<VectorCanvasScene>> scenes;
     QVector<VectorCanvasScene *> rawScenes;
 
-    if (m_currentNotebookId > 0) {
-        auto pages = m_storage.getPages(m_currentNotebookId);
-        for (const auto &p : pages) {
+    for (const auto &p : pagesToExport) {
+        if (p.id == m_currentPageId && m_currentScene) {
+            rawScenes.append(m_currentScene);
+        } else {
             auto s = createSceneForPage(p);
             rawScenes.append(s.get());
             scenes.push_back(std::move(s));
@@ -1098,11 +1136,11 @@ void MainWindow::onExportPdf() {
         rawScenes.append(m_currentScene);
     }
 
-    bool ok = PdfManager::exportNotebookToPdf(path, rawScenes, 300);
+    bool ok = PdfManager::exportNotebookToPdf(path, rawScenes, dlg.dpi());
 
     if (ok) {
         QMessageBox::information(this, "Exportación Exitosa",
-                                 QString("El cuaderno (%1 página%2) se exportó en alta resolución vectorial a:\n%3")
+                                 QString("Se exportó exitosamente %1 página%2 en alta resolución vectorial a:\n%3")
                                      .arg(rawScenes.size())
                                      .arg(rawScenes.size() > 1 ? "s" : "")
                                      .arg(path));
