@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "HomeHubDialog.hpp"
 #include "ThemeManager.hpp"
 #include "AppIcons.hpp"
 #include "../stem/CodeBlockItem.hpp"
@@ -162,66 +163,120 @@ void MainWindow::setupSidebar() {
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(6);
 
+    auto *headerLayout = new QHBoxLayout();
     auto *headerLabel = new QLabel("OmniNote STEM", m_sidebarContainer);
     headerLabel->setStyleSheet("color: #7aa2f7; font-size: 13pt; font-weight: bold; padding: 2px 0;");
-    layout->addWidget(headerLabel);
+    headerLayout->addWidget(headerLabel);
+    headerLayout->addStretch();
 
-    // Subjects and Notebooks Tree
-    auto *treeLabel = new QLabel("MATERIAS Y CUADERNOS", m_sidebarContainer);
-    treeLabel->setStyleSheet("color: #7aa2f7; font-size: 8pt; font-weight: bold; letter-spacing: 1px; padding: 6px 0 2px 0;");
-    layout->addWidget(treeLabel);
+    auto *homeBtn = new QPushButton(" Inicio", m_sidebarContainer);
+    homeBtn->setIcon(AppIcons::get(AppIcons::IconType::Home, QColor("#7aa2f7"), 14));
+    homeBtn->setObjectName("SecondaryBtn");
+    homeBtn->setToolTip("Abrir Centro de Inicio (Ctrl+H)");
+    homeBtn->setCursor(Qt::PointingHandCursor);
+    connect(homeBtn, &QPushButton::clicked, this, &MainWindow::showHomeHubDialog);
+    headerLayout->addWidget(homeBtn);
+    layout->addLayout(headerLayout);
 
-    m_subjectsTree = new QTreeWidget(m_sidebarContainer);
+    // Segmented Navigation Switcher: [ Hojas Sueltas ] [ Mis Cuadernos ]
+    auto *navSwitcherLayout = new QHBoxLayout();
+    navSwitcherLayout->setSpacing(4);
+
+    m_navSheetsBtn = new QPushButton(" Hojas Sueltas", m_sidebarContainer);
+    m_navSheetsBtn->setIcon(AppIcons::get(AppIcons::IconType::Page, QColor("#bb9af7"), 14));
+    m_navSheetsBtn->setCheckable(true);
+    m_navSheetsBtn->setCursor(Qt::PointingHandCursor);
+    m_navSheetsBtn->setStyleSheet(
+        "QPushButton { background-color: #1f2335; color: #a9b1d6; border: 1px solid #3b4261; border-radius: 6px; padding: 5px 8px; font-size: 11px; font-weight: bold; }"
+        "QPushButton:checked { background-color: #3d59a1; color: #ffffff; border-color: #7aa2f7; }"
+        "QPushButton:hover { background-color: #2e3c64; color: #ffffff; }"
+    );
+
+    m_navNotebooksBtn = new QPushButton(" Mis Cuadernos", m_sidebarContainer);
+    m_navNotebooksBtn->setIcon(AppIcons::get(AppIcons::IconType::Notebook, QColor("#9ece6a"), 14));
+    m_navNotebooksBtn->setCheckable(true);
+    m_navNotebooksBtn->setChecked(true);
+    m_navNotebooksBtn->setCursor(Qt::PointingHandCursor);
+    m_navNotebooksBtn->setStyleSheet(
+        "QPushButton { background-color: #1f2335; color: #a9b1d6; border: 1px solid #3b4261; border-radius: 6px; padding: 5px 8px; font-size: 11px; font-weight: bold; }"
+        "QPushButton:checked { background-color: #3d59a1; color: #ffffff; border-color: #7aa2f7; }"
+        "QPushButton:hover { background-color: #2e3c64; color: #ffffff; }"
+    );
+
+    connect(m_navSheetsBtn, &QPushButton::clicked, this, [this]() {
+        setNavigationMode(ModeStandaloneSheets);
+    });
+    connect(m_navNotebooksBtn, &QPushButton::clicked, this, [this]() {
+        setNavigationMode(ModeNotebooks);
+    });
+
+    navSwitcherLayout->addWidget(m_navSheetsBtn);
+    navSwitcherLayout->addWidget(m_navNotebooksBtn);
+    layout->addLayout(navSwitcherLayout);
+
+    // Tree Container (shown only in ModeNotebooks)
+    m_treeContainer = new QWidget(m_sidebarContainer);
+    auto *treeLayout = new QVBoxLayout(m_treeContainer);
+    treeLayout->setContentsMargins(0, 4, 0, 0);
+    treeLayout->setSpacing(4);
+
+    auto *treeLabel = new QLabel("MATERIAS Y CUADERNOS", m_treeContainer);
+    treeLabel->setStyleSheet("color: #7aa2f7; font-size: 8pt; font-weight: bold; letter-spacing: 1px; padding: 4px 0 2px 0;");
+    treeLayout->addWidget(treeLabel);
+
+    m_subjectsTree = new QTreeWidget(m_treeContainer);
     m_subjectsTree->setHeaderHidden(true);
     m_subjectsTree->setAnimated(true);
     m_subjectsTree->setIndentation(16);
-    layout->addWidget(m_subjectsTree, 3);
+    treeLayout->addWidget(m_subjectsTree, 3);
 
     auto *btnLayout1 = new QHBoxLayout();
     btnLayout1->setSpacing(4);
-    auto *addSubjectBtn = new QPushButton("Materia", m_sidebarContainer);
+    auto *addSubjectBtn = new QPushButton("Materia", m_treeContainer);
     addSubjectBtn->setIcon(AppIcons::get(AppIcons::IconType::Plus, QColor("#7aa2f7"), 14));
-    auto *addNotebookBtn = new QPushButton("Cuaderno", m_sidebarContainer);
+    auto *addNotebookBtn = new QPushButton("Cuaderno", m_treeContainer);
     addNotebookBtn->setIcon(AppIcons::get(AppIcons::IconType::Plus, QColor("#9ece6a"), 14));
-    auto *delTreeBtn = new QPushButton(m_sidebarContainer);
+    auto *delTreeBtn = new QPushButton(m_treeContainer);
     delTreeBtn->setIcon(AppIcons::get(AppIcons::IconType::Trash, QColor("#f7768e"), 14));
     delTreeBtn->setFixedWidth(30);
     delTreeBtn->setToolTip("Eliminar materia o cuaderno seleccionado");
     btnLayout1->addWidget(addSubjectBtn);
     btnLayout1->addWidget(addNotebookBtn);
     btnLayout1->addWidget(delTreeBtn);
-    layout->addLayout(btnLayout1);
+    treeLayout->addLayout(btnLayout1);
 
-    // Pages List
-    auto *pagesLabel = new QLabel("PÁGINAS DEL CUADERNO", m_sidebarContainer);
-    pagesLabel->setStyleSheet("color: #7aa2f7; font-size: 8pt; font-weight: bold; letter-spacing: 1px; padding: 6px 0 2px 0;");
-    layout->addWidget(pagesLabel);
+    layout->addWidget(m_treeContainer, 3);
+
+    // Pages List Section
+    m_sidebarPagesLabel = new QLabel("PÁGINAS DEL CUADERNO", m_sidebarContainer);
+    m_sidebarPagesLabel->setStyleSheet("color: #7aa2f7; font-size: 8pt; font-weight: bold; letter-spacing: 1px; padding: 6px 0 2px 0;");
+    layout->addWidget(m_sidebarPagesLabel);
 
     m_pageList = new QListWidget(m_sidebarContainer);
     layout->addWidget(m_pageList, 2);
 
     auto *btnLayout2 = new QHBoxLayout();
     btnLayout2->setSpacing(4);
-    auto *addPageBtn = new QPushButton("Página", m_sidebarContainer);
-    addPageBtn->setIcon(AppIcons::get(AppIcons::IconType::Plus, QColor("#7aa2f7"), 14));
-    addPageBtn->setToolTip("Crear nueva página (Ctrl+N)");
-    auto *delPageBtn = new QPushButton("Eliminar", m_sidebarContainer);
-    delPageBtn->setIcon(AppIcons::get(AppIcons::IconType::Trash, QColor("#f7768e"), 14));
-    delPageBtn->setToolTip("Eliminar página seleccionada (se respalda en papelera)");
+    m_addPageBtn = new QPushButton("Página", m_sidebarContainer);
+    m_addPageBtn->setIcon(AppIcons::get(AppIcons::IconType::Plus, QColor("#7aa2f7"), 14));
+    m_addPageBtn->setToolTip("Crear nueva página (Ctrl+N)");
+    m_delPageBtn = new QPushButton("Eliminar", m_sidebarContainer);
+    m_delPageBtn->setIcon(AppIcons::get(AppIcons::IconType::Trash, QColor("#f7768e"), 14));
+    m_delPageBtn->setToolTip("Eliminar página seleccionada (se respalda en papelera)");
     m_restorePageBtn = new QPushButton("Recuperar", m_sidebarContainer);
     m_restorePageBtn->setIcon(AppIcons::get(AppIcons::IconType::Restore, QColor("#7dcfff"), 14));
     m_restorePageBtn->setToolTip("Recuperar última página eliminada (Papelera)");
     m_restorePageBtn->setEnabled(false);
-    btnLayout2->addWidget(addPageBtn);
-    btnLayout2->addWidget(delPageBtn);
+    btnLayout2->addWidget(m_addPageBtn);
+    btnLayout2->addWidget(m_delPageBtn);
     btnLayout2->addWidget(m_restorePageBtn);
     layout->addLayout(btnLayout2);
 
     connect(addSubjectBtn, &QPushButton::clicked, this, &MainWindow::onAddSubject);
     connect(addNotebookBtn, &QPushButton::clicked, this, &MainWindow::onAddNotebook);
     connect(delTreeBtn, &QPushButton::clicked, this, &MainWindow::onDeleteItem);
-    connect(addPageBtn, &QPushButton::clicked, this, &MainWindow::onAddPage);
-    connect(delPageBtn, &QPushButton::clicked, this, &MainWindow::onDeleteCurrentPage);
+    connect(m_addPageBtn, &QPushButton::clicked, this, &MainWindow::onAddPage);
+    connect(m_delPageBtn, &QPushButton::clicked, this, &MainWindow::onDeleteCurrentPage);
     connect(m_restorePageBtn, &QPushButton::clicked, this, &MainWindow::onRestoreLastDeletedPage);
 
     connect(m_subjectsTree, &QTreeWidget::itemClicked, this, &MainWindow::onSubjectTreeItemClicked);
@@ -234,6 +289,11 @@ void MainWindow::setupToolbars() {
     toolsBar->setMovable(false);
     toolsBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     toolsBar->setIconSize(QSize(22, 22));
+
+    m_homeHubAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Home, QColor("#7aa2f7"), 22), "Inicio");
+    m_homeHubAction->setToolTip("Centro de Inicio (Ctrl+H) — Hojas rápidas y biblioteca de cuadernos");
+    m_homeHubAction->setShortcut(QKeySequence("Ctrl+H"));
+    connect(m_homeHubAction, &QAction::triggered, this, &MainWindow::showHomeHubDialog);
 
     auto *toggleSidebarAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Panel, QColor("#7aa2f7"), 22), "Panel");
     toggleSidebarAction->setShortcut(QKeySequence("F4"));
@@ -1095,6 +1155,12 @@ void MainWindow::loadInitialData() {
         m_currentScene->undoStack()->setClean();
         m_hasUnsavedChanges = false;
     }
+
+    QSettings settings;
+    bool showHub = settings.value("show_home_hub_on_startup", true).toBool();
+    if (showHub) {
+        QTimer::singleShot(150, this, &MainWindow::showHomeHubDialog);
+    }
 }
 
 void MainWindow::onSubjectTreeItemClicked(QTreeWidgetItem *item, int /*column*/) {
@@ -1281,6 +1347,14 @@ void MainWindow::switchPage(qint64 pageId) {
 void MainWindow::ensureActivePageForSave() {
     if (m_currentPageId > 0) return;
 
+    if (m_navMode == ModeStandaloneSheets) {
+        m_currentNotebookId = m_storage.getOrCreateStandaloneNotebook();
+        m_currentPageId = m_storage.addStandalonePage("Hoja Rápida");
+        refreshSidebarPages();
+        updateCanvasHeaderTitle();
+        return;
+    }
+
     // If the user drew strokes on the blank canvas without creating a subject/notebook yet,
     // automatically create or select a container so zero strokes are ever lost on exit.
     auto subjects = m_storage.getSubjects();
@@ -1343,30 +1417,35 @@ void MainWindow::updateCanvasHeaderTitle() {
     }
 
     if (headerTitle.isEmpty()) {
-        QString subjName;
-        for (const auto &s : m_storage.getSubjects()) {
-            if (s.id == m_currentSubjectId) {
-                subjName = s.name.trimmed();
-                break;
-            }
-        }
-
-        QString nbTitle = m_storage.getNotebookTitle(m_currentNotebookId).trimmed();
-
-        if (!subjName.isEmpty()) {
-            if (subjName.startsWith("Tarea", Qt::CaseInsensitive)) {
-                headerTitle = subjName;
-            } else {
-                headerTitle = QStringLiteral("Tarea de %1").arg(subjName);
-            }
-        } else if (!nbTitle.isEmpty()) {
-            if (nbTitle.startsWith("Tarea", Qt::CaseInsensitive)) {
-                headerTitle = nbTitle;
-            } else {
-                headerTitle = QStringLiteral("Tarea de %1").arg(nbTitle);
-            }
+        if (m_navMode == ModeStandaloneSheets || m_storage.isStandaloneNotebook(m_currentNotebookId)) {
+            int pageIdx = m_pageList->currentRow() + 1;
+            headerTitle = (pageIdx > 0) ? QStringLiteral("Hoja Suelta %1").arg(pageIdx) : QStringLiteral("Hoja Suelta");
         } else {
-            headerTitle = QStringLiteral("Tarea de Matematicas I");
+            QString subjName;
+            for (const auto &s : m_storage.getSubjects()) {
+                if (s.id == m_currentSubjectId) {
+                    subjName = s.name.trimmed();
+                    break;
+                }
+            }
+
+            QString nbTitle = m_storage.getNotebookTitle(m_currentNotebookId).trimmed();
+
+            if (!subjName.isEmpty()) {
+                if (subjName.startsWith("Tarea", Qt::CaseInsensitive)) {
+                    headerTitle = subjName;
+                } else {
+                    headerTitle = QStringLiteral("Tarea de %1").arg(subjName);
+                }
+            } else if (!nbTitle.isEmpty()) {
+                if (nbTitle.startsWith("Tarea", Qt::CaseInsensitive)) {
+                    headerTitle = nbTitle;
+                } else {
+                    headerTitle = QStringLiteral("Tarea de %1").arg(nbTitle);
+                }
+            } else {
+                headerTitle = QStringLiteral("Tarea de Matematicas I");
+            }
         }
     }
 
@@ -1887,6 +1966,11 @@ void MainWindow::onAddNotebook() {
 }
 
 void MainWindow::onAddPage() {
+    if (m_navMode == ModeStandaloneSheets) {
+        onNewQuickSheet();
+        return;
+    }
+
     if (m_currentNotebookId <= 0) {
         QMessageBox::information(this, "Sin Cuaderno Activo", "Primero crea o selecciona un cuaderno para añadir páginas.");
         return;
@@ -1906,9 +1990,10 @@ void MainWindow::onAddPage() {
 }
 
 void MainWindow::onDeleteCurrentPage() {
-    if (m_currentNotebookId <= 0) return;
+    qint64 nbId = (m_navMode == ModeStandaloneSheets) ? m_storage.getOrCreateStandaloneNotebook() : m_currentNotebookId;
+    if (nbId <= 0) return;
 
-    auto pages = m_storage.getPages(m_currentNotebookId);
+    auto pages = (m_navMode == ModeStandaloneSheets) ? m_storage.getStandalonePages() : m_storage.getPages(nbId);
     if (pages.isEmpty()) return;
 
     auto *item = m_pageList->currentItem();
@@ -1952,7 +2037,7 @@ void MainWindow::onDeleteCurrentPage() {
 
     // Backup to trash before deleting so user NEVER loses anything
     DeletedPageBackup backup;
-    backup.originalNotebookId = m_currentNotebookId;
+    backup.originalNotebookId = nbId;
     backup.originalPageNumber = targetRecord.pageNumber;
     backup.pageRecord = targetRecord;
     if (m_currentPageId == targetPageId && m_hasUnsavedChanges) {
@@ -1977,20 +2062,7 @@ void MainWindow::onDeleteCurrentPage() {
     m_storage.deletePage(targetPageId);
 
     // Refresh remaining pages in list
-    auto remaining = m_storage.getPages(m_currentNotebookId);
-    QSignalBlocker blocker(m_pageList);
-    m_pageList->clear();
-    for (const auto &p : remaining) {
-        auto *newItem = new QListWidgetItem(QString("Página %1").arg(p.pageNumber), m_pageList);
-        newItem->setData(Qt::UserRole, p.id);
-    }
-    int nextRow = qBound(0, row, static_cast<int>(remaining.size()) - 1);
-    m_pageList->setCurrentRow(nextRow);
-    blocker.unblock();
-
-    if (nextRow >= 0 && nextRow < remaining.size()) {
-        switchPage(remaining[nextRow].id);
-    }
+    refreshSidebarPages();
 
     if (m_saveStatusLabel) {
         m_saveStatusLabel->setText(QString("%1 eliminada (respaldada en Papelera)").arg(pageTitle));
@@ -2744,6 +2816,151 @@ void MainWindow::showShortcutsGuide() {
     layout->addLayout(btnLayout);
 
     dialog->exec();
+}
+
+void MainWindow::showHomeHubDialog() {
+    HomeHubDialog dlg(m_storage, this);
+    connect(&dlg, &HomeHubDialog::newQuickSheetRequested, this, &MainWindow::onNewQuickSheet);
+    connect(&dlg, &HomeHubDialog::openStandalonePageRequested, this, &MainWindow::openStandalonePage);
+    connect(&dlg, &HomeHubDialog::openNotebooksRequested, this, [this]() {
+        setNavigationMode(ModeNotebooks);
+    });
+    dlg.exec();
+}
+
+void MainWindow::onNewQuickSheet() {
+    if (m_hasUnsavedChanges && m_currentPageId > 0) {
+        onSaveCurrentPage();
+    }
+
+    setNavigationMode(ModeStandaloneSheets);
+    qint64 newPageId = m_storage.addStandalonePage("Hoja Rápida");
+    if (newPageId > 0) {
+        m_currentPageId = newPageId;
+        refreshSidebarPages();
+        switchPage(newPageId);
+        if (m_saveStatusLabel) {
+            m_saveStatusLabel->setText("Nueva Hoja Rápida creada");
+        }
+    }
+}
+
+void MainWindow::openStandalonePage(qint64 pageId) {
+    if (pageId <= 0) return;
+    if (m_hasUnsavedChanges && m_currentPageId > 0) {
+        onSaveCurrentPage();
+    }
+    setNavigationMode(ModeStandaloneSheets);
+    m_currentPageId = pageId;
+    refreshSidebarPages();
+    switchPage(pageId);
+}
+
+void MainWindow::setNavigationMode(int mode) {
+    if (m_hasUnsavedChanges && m_currentPageId > 0) {
+        onSaveCurrentPage();
+    }
+
+    m_navMode = mode;
+    if (mode == ModeStandaloneSheets) {
+        if (m_navSheetsBtn) m_navSheetsBtn->setChecked(true);
+        if (m_navNotebooksBtn) m_navNotebooksBtn->setChecked(false);
+        if (m_treeContainer) m_treeContainer->setVisible(false);
+        if (m_sidebarPagesLabel) m_sidebarPagesLabel->setText("HOJAS SUELTAS");
+        if (m_addPageBtn) {
+            m_addPageBtn->setText("Hoja");
+            m_addPageBtn->setToolTip("Crear nueva hoja suelta independiente");
+        }
+        m_currentNotebookId = m_storage.getOrCreateStandaloneNotebook();
+        refreshSidebarPages();
+    } else {
+        if (m_navSheetsBtn) m_navSheetsBtn->setChecked(false);
+        if (m_navNotebooksBtn) m_navNotebooksBtn->setChecked(true);
+        if (m_treeContainer) m_treeContainer->setVisible(true);
+        if (m_sidebarPagesLabel) m_sidebarPagesLabel->setText("PÁGINAS DEL CUADERNO");
+        if (m_addPageBtn) {
+            m_addPageBtn->setText("Página");
+            m_addPageBtn->setToolTip("Crear nueva página (Ctrl+N)");
+        }
+        auto *item = m_subjectsTree->currentItem();
+        if (item && item->data(0, Qt::UserRole + 1).toString() == "notebook") {
+            m_currentNotebookId = item->data(0, Qt::UserRole).toLongLong();
+        } else {
+            for (int i = 0; i < m_subjectsTree->topLevelItemCount(); ++i) {
+                auto *sub = m_subjectsTree->topLevelItem(i);
+                if (sub->childCount() > 0) {
+                    m_subjectsTree->setCurrentItem(sub->child(0));
+                    onSubjectTreeItemClicked(sub->child(0), 0);
+                    return;
+                }
+            }
+        }
+        refreshSidebarPages();
+    }
+}
+
+void MainWindow::refreshSidebarPages() {
+    QSignalBlocker blocker(m_pageList);
+    m_pageList->clear();
+
+    if (m_navMode == ModeStandaloneSheets) {
+        qint64 standaloneNbId = m_storage.getOrCreateStandaloneNotebook();
+        m_currentNotebookId = standaloneNbId;
+        auto pages = m_storage.getStandalonePages();
+        int activeRow = -1;
+        for (int i = 0; i < pages.size(); ++i) {
+            const auto &p = pages[i];
+            QString label = p.title.trimmed().isEmpty() ? QString("Hoja %1").arg(p.pageNumber) : p.title.trimmed();
+            auto *pItem = new QListWidgetItem(AppIcons::get(AppIcons::IconType::Page, QColor("#7dcfff"), 16), label, m_pageList);
+            pItem->setData(Qt::UserRole, p.id);
+            if (!p.title.trimmed().isEmpty()) pItem->setToolTip(p.title.trimmed());
+            if (p.id == m_currentPageId) {
+                activeRow = i;
+            }
+        }
+
+        if (pages.isEmpty()) {
+            blocker.unblock();
+            m_currentPageId = -1;
+            if (m_currentScene) {
+                m_currentScene->clearCanvas();
+                m_currentScene->undoStack()->clear();
+                m_hasUnsavedChanges = false;
+            }
+            updateCanvasHeaderTitle();
+        } else {
+            if (activeRow < 0) activeRow = 0;
+            m_pageList->setCurrentRow(activeRow);
+            blocker.unblock();
+            switchPage(pages[activeRow].id);
+        }
+    } else {
+        if (m_currentNotebookId <= 0) {
+            blocker.unblock();
+            return;
+        }
+        auto pages = m_storage.getPages(m_currentNotebookId);
+        int activeRow = -1;
+        for (int i = 0; i < pages.size(); ++i) {
+            const auto &p = pages[i];
+            QString label = p.title.trimmed().isEmpty() ? QString("Página %1").arg(p.pageNumber) : QString("Pág %1 • %2").arg(p.pageNumber).arg(p.title.trimmed());
+            auto *pItem = new QListWidgetItem(AppIcons::get(AppIcons::IconType::Page, QColor("#7dcfff"), 16), label, m_pageList);
+            pItem->setData(Qt::UserRole, p.id);
+            if (!p.title.trimmed().isEmpty()) pItem->setToolTip(p.title.trimmed());
+            if (p.id == m_currentPageId) {
+                activeRow = i;
+            }
+        }
+
+        if (pages.isEmpty()) {
+            blocker.unblock();
+        } else {
+            if (activeRow < 0) activeRow = 0;
+            m_pageList->setCurrentRow(activeRow);
+            blocker.unblock();
+            switchPage(pages[activeRow].id);
+        }
+    }
 }
 
 } // namespace OmniNote

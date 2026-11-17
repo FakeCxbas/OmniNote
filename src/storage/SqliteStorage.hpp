@@ -72,7 +72,7 @@ public:
     bool rollbackTransaction();
 
     // Subjects
-    QVector<SubjectRecord> getSubjects();
+    QVector<SubjectRecord> getSubjects(bool includeSystem = false);
     qint64 addSubject(const QString &name, const QString &color = "#7aa2f7");
     bool deleteSubject(qint64 subjectId);
 
@@ -82,6 +82,12 @@ public:
     bool deleteNotebook(qint64 notebookId);
     QString getNotebookTitle(qint64 notebookId);
     bool updateNotebookTitle(qint64 notebookId, const QString &title);
+
+    // Standalone Sheets (Hojas Independientes)
+    qint64 getOrCreateStandaloneNotebook();
+    QVector<PageRecord> getStandalonePages();
+    qint64 addStandalonePage(const QString &title = QString());
+    bool isStandaloneNotebook(qint64 notebookId);
 
     // Pages
     QVector<PageRecord> getPages(qint64 notebookId);

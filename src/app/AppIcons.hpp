@@ -49,7 +49,8 @@ public:
         Help,
         Group,
         Ungroup,
-        Cursor
+        Cursor,
+        Home
     };
 
     static QIcon get(IconType type, const QColor &color = QColor("#c0caf5"), int size = 20);

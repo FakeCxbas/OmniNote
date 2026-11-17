@@ -80,6 +80,9 @@ private slots:
     void onEditHeaderTitle();
     void showCloudSyncDialog();
     void showShortcutsGuide();
+    void showHomeHubDialog();
+    void onNewQuickSheet();
+    void openStandalonePage(qint64 pageId);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -103,6 +106,11 @@ private:
     std::unique_ptr<VectorCanvasScene> createSceneForPage(const PageRecord &p);
     QVector<GoogleDriveSyncService::SyncFileEntry> prepareNotebookExportFiles(const QString &targetDir);
 
+    void setNavigationMode(int mode);
+    void refreshSidebarPages();
+
+    enum NavigationModeType { ModeNotebooks = 0, ModeStandaloneSheets = 1 };
+
     // Core Canvas & Scene
     VectorCanvasScene *m_currentScene{nullptr};
     VectorCanvasView *m_canvasView{nullptr};
@@ -113,6 +121,7 @@ private:
     QTimer *m_autoSaveTimer{nullptr};
     bool m_hasUnsavedChanges{false};
     bool m_isSaving{false};
+    int m_navMode{ModeNotebooks};
 
     // Active Database IDs
     qint64 m_currentSubjectId{-1};
@@ -122,8 +131,14 @@ private:
     // Sidebar Widgets
     QSplitter *m_mainSplitter{nullptr};
     QWidget *m_sidebarContainer{nullptr};
+    QPushButton *m_navSheetsBtn{nullptr};
+    QPushButton *m_navNotebooksBtn{nullptr};
+    QWidget *m_treeContainer{nullptr};
     QTreeWidget *m_subjectsTree{nullptr};
+    QLabel *m_sidebarPagesLabel{nullptr};
     QListWidget *m_pageList{nullptr};
+    QPushButton *m_addPageBtn{nullptr};
+    QPushButton *m_delPageBtn{nullptr};
     QPushButton *m_restorePageBtn{nullptr};
 
     struct DeletedPageBackup {
@@ -153,6 +168,7 @@ private:
     QAction *m_rulerAction{nullptr};
     QAction *m_cloudSyncAction{nullptr};
     QAction *m_helpAction{nullptr};
+    QAction *m_homeHubAction{nullptr};
     class VirtualRulerItem *m_virtualRuler{nullptr};
     GoogleDriveSyncService *m_driveSyncService{nullptr};
     struct PendingDriveSyncEntry {
