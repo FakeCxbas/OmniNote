@@ -25,6 +25,7 @@
 #include "src/canvas/VirtualRulerItem.hpp"
 #include "src/app/AppIcons.hpp"
 #include "src/sync/GoogleDriveSync.hpp"
+#include "src/app/HomeHubDialog.hpp"
 
 using namespace OmniNote;
 
@@ -1288,6 +1289,85 @@ void testCanvaTemplateAndMultiThemePalettes() {
     std::cout << "  ✓ Canva school template, multi-theme palettes & fluid tablet dynamics verified!" << std::endl;
 }
 
+void testStandaloneSheetsAndHomeHub() {
+    std::cout << "[TEST] 21. Standalone Sheets, Hub Modal & Isolated System Separation..." << std::endl;
+
+    QTemporaryDir tempDir;
+    assert(tempDir.isValid());
+    QString dbPath = tempDir.path() + "/test_hub.omninote";
+
+    SqliteStorage storage;
+    assert(storage.open(dbPath));
+
+    // 1. Regular academic subjects
+    qint64 subjId = storage.addSubject("Calculo Vectorial");
+    assert(subjId > 0);
+    qint64 nbId = storage.addNotebook(subjId, "Notas de Clase");
+    assert(nbId > 0);
+
+    // Ensure normal getSubjects only lists academic subjects
+    auto academicSubjs = storage.getSubjects(false);
+    assert(academicSubjs.size() == 1);
+    assert(academicSubjs.first().name == "Calculo Vectorial");
+
+    // 2. Standalone notebook generation
+    qint64 standaloneNbId = storage.getOrCreateStandaloneNotebook();
+    assert(standaloneNbId > 0);
+    assert(storage.isStandaloneNotebook(standaloneNbId) == true);
+    assert(storage.isStandaloneNotebook(nbId) == false);
+
+    // Ensure standalone notebook's subject is NOT in normal getSubjects()
+    assert(storage.getSubjects(false).size() == 1);
+    assert(storage.getSubjects(true).size() == 2);
+
+    // Calling getOrCreateStandaloneNotebook again returns the same ID
+    qint64 sameId = storage.getOrCreateStandaloneNotebook();
+    assert(sameId == standaloneNbId);
+
+    // 3. Standalone pages creation & listing
+    qint64 p1 = storage.addStandalonePage("Borrador Rapido");
+    qint64 p2 = storage.addStandalonePage("Hoja de Ejercicios");
+    assert(p1 > 0 && p2 > 0);
+
+    auto standalonePages = storage.getStandalonePages();
+    assert(standalonePages.size() == 2);
+    assert(standalonePages[0].id == p1);
+    assert(standalonePages[0].title == "Borrador Rapido");
+    assert(standalonePages[1].id == p2);
+    assert(standalonePages[1].title == "Hoja de Ejercicios");
+
+    // 4. Save strokes to standalone page
+    StrokeRecord sr;
+    sr.id = 1;
+    sr.pageId = p1;
+    sr.zValue = 10.0;
+    sr.blobData = QByteArray("mock_stroke");
+    assert(storage.savePageData(p1, {sr}, {}));
+
+    QVector<StrokeRecord> loadedStrokes;
+    QVector<StemBlockRecord> loadedBlocks;
+    assert(storage.loadPageData(p1, loadedStrokes, loadedBlocks));
+    assert(loadedStrokes.size() == 1);
+    assert(loadedStrokes[0].blobData == "mock_stroke");
+
+    // 5. Delete standalone page & renumbering
+    storage.deletePage(p1);
+    auto remainingPages = storage.getStandalonePages();
+    assert(remainingPages.size() == 1);
+    assert(remainingPages[0].id == p2);
+    assert(remainingPages[0].pageNumber == 1);
+
+    // 6. HomeHubDialog instantiation
+    HomeHubDialog hubDlg(storage);
+    assert(!hubDlg.windowTitle().isEmpty());
+
+    // 7. Vector icon test for Home
+    QPixmap homeIcon = AppIcons::getPixmap(AppIcons::IconType::Home, QColor("#7aa2f7"), 24);
+    assert(!homeIcon.isNull() && homeIcon.width() > 0 && homeIcon.height() > 0);
+
+    std::cout << "  ✓ Standalone sheets, system isolation & Home Hub modal verified!" << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     // Initialize QApplication with headless / offscreen support for scene/raster operations
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1317,12 +1397,14 @@ int main(int argc, char *argv[]) {
     testTextBlockSelectionAndLasso();
     testCanvasSelectionAndGrouping();
     testCanvaTemplateAndMultiThemePalettes();
+    testStandaloneSheetsAndHomeHub();
 
     // Render visual inspection artifact of all toolbar icons
     {
         const int iconSize = 24;
         const int padding = 12;
         const QVector<QPair<QString, AppIcons::IconType>> toolbarIcons = {
+            {"Inicio", AppIcons::IconType::Home},
             {"Panel", AppIcons::IconType::Panel},
             {"Deshacer", AppIcons::IconType::Undo},
             {"Rehacer", AppIcons::IconType::Redo},
@@ -1425,6 +1507,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "\n>>> ALL 20 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
+    std::cout << "\n>>> ALL 21 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
     return 0;
 }

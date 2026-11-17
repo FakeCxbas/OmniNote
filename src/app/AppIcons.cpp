@@ -132,6 +132,9 @@ QString AppIcons::getSvgXml(IconType type, const QString &colorHex) {
     case IconType::Cursor:
         pathData = R"(<path d="M160,216a8,8,0,0,1-7.14-4.43L116,137,39.43,103.14a8,8,0,0,1,1.15-15L208.58,32.14a8,8,0,0,1,10.28,10.28L163.86,210.42A8,8,0,0,1,160,216Z" opacity="0.2"/><path d="M216.58,34.42a16,16,0,0,0-15.74-4.14L32.84,86.28a16,16,0,0,0-2.31,30.08l76.57,33.87,33.87,76.57a16,16,0,0,0,14.54,9.58h.56a16,16,0,0,0,14.98-11.89L220.72,52.49A16,16,0,0,0,216.58,34.42ZM156,209.43l-33.87-76.57a8,8,0,0,0-4-4L41.57,95l168-56Z"/>)";
         break;
+    case IconType::Home:
+        pathData = R"(<path d="M216,115.34V208a8,8,0,0,1-8,8H152V152H104v64H48a8,8,0,0,1-8-8V115.34a8,8,0,0,1,2.62-5.92l80-72.73a8,8,0,0,1,10.76,0l80,72.73A8,8,0,0,1,216,115.34Z" opacity="0.2"/><path d="M218.83,103.77l-80-72.73a16,16,0,0,0-21.66,0l-80,72.73A16,16,0,0,0,32,115.63V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V115.63A16,16,0,0,0,218.83,103.77ZM208,208H160V160a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v48H48V115.63l80-72.73,80,72.73Z"/>)";
+        break;
     }
 
     return QString(
@@ -181,6 +184,7 @@ QString AppIcons::getSolarSvgName(IconType type) {
     case IconType::Group: return "group.svg";
     case IconType::Ungroup: return "ungroup.svg";
     case IconType::Cursor: return "cursor.svg";
+    case IconType::Home: return "home.svg";
     }
     return QString();
 }

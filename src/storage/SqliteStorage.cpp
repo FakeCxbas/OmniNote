@@ -130,11 +130,13 @@ bool SqliteStorage::createTables() {
     return true;
 }
 
-QVector<SubjectRecord> SqliteStorage::getSubjects() {
+QVector<SubjectRecord> SqliteStorage::getSubjects(bool includeSystem) {
     QVector<SubjectRecord> result;
     if (!m_db) return result;
 
-    const char *sql = "SELECT id, name, color, created_at FROM Subjects ORDER BY id ASC;";
+    const char *sql = includeSystem
+        ? "SELECT id, name, color, created_at FROM Subjects ORDER BY id ASC;"
+        : "SELECT id, name, color, created_at FROM Subjects WHERE name != '__standalone_sheets__' ORDER BY id ASC;";
     sqlite3_stmt *stmt = nullptr;
 
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
@@ -282,6 +284,72 @@ bool SqliteStorage::updateNotebookTitle(qint64 notebookId, const QString &title)
         sqlite3_finalize(stmt);
     }
     return ok;
+}
+
+static const char *STANDALONE_SUBJECT_NAME = "__standalone_sheets__";
+static const char *STANDALONE_NOTEBOOK_TITLE = "Hojas Sueltas";
+
+qint64 SqliteStorage::getOrCreateStandaloneNotebook() {
+    if (!m_db) return -1;
+
+    qint64 subjId = -1;
+    const char *findSubjSql = "SELECT id FROM Subjects WHERE name = ? LIMIT 1;";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, findSubjSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, STANDALONE_SUBJECT_NAME, -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            subjId = sqlite3_column_int64(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (subjId <= 0) {
+        subjId = addSubject(QString::fromUtf8(STANDALONE_SUBJECT_NAME), "#bb9af7");
+    }
+
+    if (subjId <= 0) return -1;
+
+    qint64 nbId = -1;
+    const char *findNbSql = "SELECT id FROM Notebooks WHERE subject_id = ? AND title = ? LIMIT 1;";
+    if (sqlite3_prepare_v2(m_db, findNbSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int64(stmt, 1, subjId);
+        sqlite3_bind_text(stmt, 2, STANDALONE_NOTEBOOK_TITLE, -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            nbId = sqlite3_column_int64(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (nbId <= 0) {
+        nbId = addNotebook(subjId, QString::fromUtf8(STANDALONE_NOTEBOOK_TITLE));
+    }
+
+    return nbId;
+}
+
+QVector<PageRecord> SqliteStorage::getStandalonePages() {
+    qint64 nbId = getOrCreateStandaloneNotebook();
+    if (nbId <= 0) return {};
+    return getPages(nbId);
+}
+
+qint64 SqliteStorage::addStandalonePage(const QString &title) {
+    qint64 nbId = getOrCreateStandaloneNotebook();
+    if (nbId <= 0) return -1;
+
+    auto pages = getPages(nbId);
+    int nextNum = pages.size() + 1;
+    QString actualTitle = title.trimmed().isEmpty()
+        ? QString("Hoja Suelta %1").arg(nextNum)
+        : title.trimmed();
+
+    return addPage(nbId, nextNum, 1240.0, 1754.0, 5, -1, "", actualTitle);
+}
+
+bool SqliteStorage::isStandaloneNotebook(qint64 notebookId) {
+    if (notebookId <= 0) return false;
+    qint64 standaloneNbId = getOrCreateStandaloneNotebook();
+    return notebookId == standaloneNbId;
 }
 
 QVector<PageRecord> SqliteStorage::getPages(qint64 notebookId) {
