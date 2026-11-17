@@ -1,7 +1,8 @@
 #include "MainWindow.hpp"
-#include "HomeHubDialog.hpp"
+#include "HomeHubView.hpp"
 #include "ThemeManager.hpp"
 #include "AppIcons.hpp"
+#include <QStackedWidget>
 #include "../stem/CodeBlockItem.hpp"
 #include "../stem/FunctionPlotItem.hpp"
 #include "../stem/TextBlockItem.hpp"
@@ -126,14 +127,16 @@ void MainWindow::setupUI() {
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    m_mainSplitter = new QSplitter(Qt::Horizontal, centralWidget);
+    m_mainStack = new QStackedWidget(centralWidget);
+
+    m_mainSplitter = new QSplitter(Qt::Horizontal, m_mainStack);
 
     // Left Sidebar Container (uses native system QStyle and QPalette)
     m_sidebarContainer = new QWidget(m_mainSplitter);
     m_sidebarContainer->setMinimumWidth(240);
     m_sidebarContainer->setMaximumWidth(380);
 
-    // Right Canvas View Container (keeps dark #14161C page and #0C0D12 viewport background)
+    // Right Canvas View Container
     m_currentScene = new VectorCanvasScene(1240, 1754, this);
     m_canvasView = new VectorCanvasView(m_currentScene, m_mainSplitter);
 
@@ -143,7 +146,24 @@ void MainWindow::setupUI() {
     m_mainSplitter->setStretchFactor(1, 1);
     m_mainSplitter->setSizes({260, 1100});
 
-    mainLayout->addWidget(m_mainSplitter);
+    // Full Screen Home Hub View
+    m_homeHubView = new HomeHubView(m_storage, m_mainStack);
+    connect(m_homeHubView, &HomeHubView::newQuickSheetRequested, this, &MainWindow::onNewQuickSheet);
+    connect(m_homeHubView, &HomeHubView::openStandalonePageRequested, this, &MainWindow::openStandalonePage);
+    connect(m_homeHubView, &HomeHubView::openNotebooksRequested, this, [this]() {
+        setNavigationMode(ModeNotebooks);
+        showEditorScreen();
+    });
+    connect(m_homeHubView, &HomeHubView::openNotebookRequested, this, &MainWindow::openNotebookDirect);
+    connect(m_homeHubView, &HomeHubView::returnToCanvasRequested, this, &MainWindow::showEditorScreen);
+
+    // Stack index 0: Canvas Editor Workspace
+    m_mainStack->addWidget(m_mainSplitter);
+    // Stack index 1: Full-Screen Home Hub View
+    m_mainStack->addWidget(m_homeHubView);
+    m_mainStack->setCurrentWidget(m_mainSplitter);
+
+    mainLayout->addWidget(m_mainStack);
 
     // Scene & View signals
     connect(m_canvasView, &VectorCanvasView::cursorCoordinatesChanged, this, &MainWindow::updateCoordinateDisplay);
@@ -174,7 +194,7 @@ void MainWindow::setupSidebar() {
     homeBtn->setObjectName("SecondaryBtn");
     homeBtn->setToolTip("Abrir Centro de Inicio (Ctrl+H)");
     homeBtn->setCursor(Qt::PointingHandCursor);
-    connect(homeBtn, &QPushButton::clicked, this, &MainWindow::showHomeHubDialog);
+    connect(homeBtn, &QPushButton::clicked, this, &MainWindow::showHomeScreen);
     headerLayout->addWidget(homeBtn);
     layout->addLayout(headerLayout);
 
@@ -293,7 +313,7 @@ void MainWindow::setupToolbars() {
     m_homeHubAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Home, QColor("#7aa2f7"), 22), "Inicio");
     m_homeHubAction->setToolTip("Centro de Inicio (Ctrl+H) — Hojas rápidas y biblioteca de cuadernos");
     m_homeHubAction->setShortcut(QKeySequence("Ctrl+H"));
-    connect(m_homeHubAction, &QAction::triggered, this, &MainWindow::showHomeHubDialog);
+    connect(m_homeHubAction, &QAction::triggered, this, &MainWindow::toggleHomeHubScreen);
 
     auto *toggleSidebarAction = toolsBar->addAction(AppIcons::get(AppIcons::IconType::Panel, QColor("#7aa2f7"), 22), "Panel");
     toggleSidebarAction->setShortcut(QKeySequence("F4"));
@@ -1141,25 +1161,21 @@ void MainWindow::loadInitialData() {
         subItem->setExpanded(true);
     }
 
-    if (m_subjectsTree->topLevelItemCount() > 0) {
-        auto *firstSub = m_subjectsTree->topLevelItem(0);
-        m_currentSubjectId = firstSub->data(0, Qt::UserRole).toLongLong();
-        if (firstSub->childCount() > 0) {
-            auto *firstNb = firstSub->child(0);
-            m_subjectsTree->setCurrentItem(firstNb);
-            onSubjectTreeItemClicked(firstNb, 0);
-        } else {
-            m_subjectsTree->setCurrentItem(firstSub);
-        }
-    } else if (m_currentScene) {
-        m_currentScene->undoStack()->setClean();
-        m_hasUnsavedChanges = false;
+    // Default to the standalone Canva white sheet as requested by the user
+    qint64 standaloneNbId = m_storage.getOrCreateStandaloneNotebook();
+    m_currentNotebookId = standaloneNbId;
+    auto standalonePages = m_storage.getStandalonePages();
+    if (standalonePages.isEmpty()) {
+        m_currentPageId = m_storage.addStandalonePage("Hoja Suelta");
+    } else {
+        m_currentPageId = standalonePages.first().id;
     }
 
-    QSettings settings;
-    bool showHub = settings.value("show_home_hub_on_startup", true).toBool();
-    if (showHub) {
-        QTimer::singleShot(150, this, &MainWindow::showHomeHubDialog);
+    setNavigationMode(ModeStandaloneSheets);
+    showEditorScreen();
+
+    if (m_homeHubView) {
+        m_homeHubView->refreshData();
     }
 }
 
@@ -2818,14 +2834,36 @@ void MainWindow::showShortcutsGuide() {
     dialog->exec();
 }
 
-void MainWindow::showHomeHubDialog() {
-    HomeHubDialog dlg(m_storage, this);
-    connect(&dlg, &HomeHubDialog::newQuickSheetRequested, this, &MainWindow::onNewQuickSheet);
-    connect(&dlg, &HomeHubDialog::openStandalonePageRequested, this, &MainWindow::openStandalonePage);
-    connect(&dlg, &HomeHubDialog::openNotebooksRequested, this, [this]() {
-        setNavigationMode(ModeNotebooks);
-    });
-    dlg.exec();
+void MainWindow::toggleHomeHubScreen() {
+    if (m_mainStack && m_homeHubView && m_mainStack->currentWidget() == m_homeHubView) {
+        showEditorScreen();
+    } else {
+        showHomeScreen();
+    }
+}
+
+void MainWindow::showHomeScreen() {
+    if (m_hasUnsavedChanges && m_currentPageId > 0) {
+        onSaveCurrentPage();
+    }
+    if (m_homeHubView) {
+        m_homeHubView->refreshData();
+    }
+    if (m_mainStack && m_homeHubView) {
+        m_mainStack->setCurrentWidget(m_homeHubView);
+    }
+    if (m_homeHubAction) {
+        m_homeHubAction->setChecked(true);
+    }
+}
+
+void MainWindow::showEditorScreen() {
+    if (m_mainStack && m_mainSplitter) {
+        m_mainStack->setCurrentWidget(m_mainSplitter);
+    }
+    if (m_homeHubAction) {
+        m_homeHubAction->setChecked(false);
+    }
 }
 
 void MainWindow::onNewQuickSheet() {
@@ -2834,15 +2872,16 @@ void MainWindow::onNewQuickSheet() {
     }
 
     setNavigationMode(ModeStandaloneSheets);
-    qint64 newPageId = m_storage.addStandalonePage("Hoja Rápida");
+    qint64 newPageId = m_storage.addStandalonePage("Hoja Suelta");
     if (newPageId > 0) {
         m_currentPageId = newPageId;
         refreshSidebarPages();
         switchPage(newPageId);
         if (m_saveStatusLabel) {
-            m_saveStatusLabel->setText("Nueva Hoja Rápida creada");
+            m_saveStatusLabel->setText("Nueva Hoja Suelta creada");
         }
     }
+    showEditorScreen();
 }
 
 void MainWindow::openStandalonePage(qint64 pageId) {
@@ -2854,6 +2893,29 @@ void MainWindow::openStandalonePage(qint64 pageId) {
     m_currentPageId = pageId;
     refreshSidebarPages();
     switchPage(pageId);
+    showEditorScreen();
+}
+
+void MainWindow::openNotebookDirect(qint64 subjectId, qint64 notebookId) {
+    if (m_hasUnsavedChanges && m_currentPageId > 0) {
+        onSaveCurrentPage();
+    }
+    setNavigationMode(ModeNotebooks);
+    for (int i = 0; i < m_subjectsTree->topLevelItemCount(); ++i) {
+        auto *subItem = m_subjectsTree->topLevelItem(i);
+        if (subItem->data(0, Qt::UserRole).toLongLong() == subjectId) {
+            for (int j = 0; j < subItem->childCount(); ++j) {
+                auto *nbItem = subItem->child(j);
+                if (nbItem->data(0, Qt::UserRole).toLongLong() == notebookId) {
+                    m_subjectsTree->setCurrentItem(nbItem);
+                    onSubjectTreeItemClicked(nbItem, 0);
+                    showEditorScreen();
+                    return;
+                }
+            }
+        }
+    }
+    showEditorScreen();
 }
 
 void MainWindow::setNavigationMode(int mode) {
