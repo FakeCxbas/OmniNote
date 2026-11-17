@@ -1,39 +1,33 @@
 #pragma once
 
-#include <QDialog>
+#include <QWidget>
 #include <QLabel>
 #include <QPushButton>
-#include <QCheckBox>
 #include <QListWidget>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
+#include <QScrollArea>
 #include "../storage/SqliteStorage.hpp"
 
 namespace OmniNote {
 
-class HomeHubDialog : public QDialog {
+class HomeHubView : public QWidget {
     Q_OBJECT
 
 public:
-    enum class HubAction {
-        Dismiss,
-        NewQuickSheet,
-        OpenStandalonePage,
-        OpenNotebooksLibrary
-    };
+    explicit HomeHubView(SqliteStorage &storage, QWidget *parent = nullptr);
+    ~HomeHubView() override = default;
 
-    explicit HomeHubDialog(SqliteStorage &storage, QWidget *parent = nullptr);
-    ~HomeHubDialog() override = default;
-
-    HubAction selectedAction() const { return m_selectedAction; }
-    qint64 selectedPageId() const { return m_selectedPageId; }
-    bool showOnStartup() const;
+    void refreshData();
 
 signals:
     void newQuickSheetRequested();
     void openStandalonePageRequested(qint64 pageId);
     void openNotebooksRequested();
+    void openNotebookRequested(qint64 subjectId, qint64 notebookId);
+    void returnToCanvasRequested();
 
 private slots:
     void onNewQuickSheetClicked();
@@ -41,22 +35,19 @@ private slots:
     void onOpenSelectedStandaloneSheet();
     void onDeleteSelectedStandaloneSheet();
     void onStandaloneItemDoubleClicked(QListWidgetItem *item);
-    void onStartupCheckToggled(bool checked);
+    void onNotebookItemClicked(QTreeWidgetItem *item, int column);
 
 private:
     void setupUI();
-    void loadData();
 
     SqliteStorage &m_storage;
-    HubAction m_selectedAction{HubAction::Dismiss};
-    qint64 m_selectedPageId{-1};
 
     QLabel *m_standaloneCountLabel{nullptr};
     QLabel *m_notebooksCountLabel{nullptr};
     QListWidget *m_sheetsList{nullptr};
+    QTreeWidget *m_notebooksTree{nullptr};
     QPushButton *m_openSheetBtn{nullptr};
     QPushButton *m_deleteSheetBtn{nullptr};
-    QCheckBox *m_startupCheck{nullptr};
 };
 
 } // namespace OmniNote

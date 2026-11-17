@@ -11,6 +11,7 @@
 #include <QDoubleSpinBox>
 #include <QActionGroup>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QCloseEvent>
 #include <QTimer>
 #include <memory>
@@ -80,9 +81,12 @@ private slots:
     void onEditHeaderTitle();
     void showCloudSyncDialog();
     void showShortcutsGuide();
-    void showHomeHubDialog();
+    void showHomeScreen();
+    void showEditorScreen();
+    void toggleHomeHubScreen();
     void onNewQuickSheet();
     void openStandalonePage(qint64 pageId);
+    void openNotebookDirect(qint64 subjectId, qint64 notebookId);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -127,6 +131,10 @@ private:
     qint64 m_currentSubjectId{-1};
     qint64 m_currentNotebookId{-1};
     qint64 m_currentPageId{-1};
+
+    // Stack & Views
+    QStackedWidget *m_mainStack{nullptr};
+    class HomeHubView *m_homeHubView{nullptr};
 
     // Sidebar Widgets
     QSplitter *m_mainSplitter{nullptr};

@@ -30,8 +30,8 @@ set(SOURCES
     src/main.cpp
     src/app/MainWindow.hpp
     src/app/MainWindow.cpp
-    src/app/HomeHubDialog.hpp
-    src/app/HomeHubDialog.cpp
+    src/app/HomeHubView.hpp
+    src/app/HomeHubView.cpp
     src/app/ThemeManager.hpp
     src/app/AppIcons.hpp
     src/app/AppIcons.cpp
@@ -152,7 +152,7 @@ set(TEST_SOURCES
     src/storage/SqliteStorage.cpp
     src/pdf/PdfManager.cpp
     src/sync/GoogleDriveSync.cpp
-    src/app/HomeHubDialog.cpp
+    src/app/HomeHubView.cpp
     assets/icons.qrc
 )
 

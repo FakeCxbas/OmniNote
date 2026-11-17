@@ -25,7 +25,7 @@
 #include "src/canvas/VirtualRulerItem.hpp"
 #include "src/app/AppIcons.hpp"
 #include "src/sync/GoogleDriveSync.hpp"
-#include "src/app/HomeHubDialog.hpp"
+#include "src/app/HomeHubView.hpp"
 
 using namespace OmniNote;
 
@@ -1357,15 +1357,16 @@ void testStandaloneSheetsAndHomeHub() {
     assert(remainingPages[0].id == p2);
     assert(remainingPages[0].pageNumber == 1);
 
-    // 6. HomeHubDialog instantiation
-    HomeHubDialog hubDlg(storage);
-    assert(!hubDlg.windowTitle().isEmpty());
+    // 6. Full-Screen HomeHubView widget instantiation
+    HomeHubView hubView(storage);
+    hubView.resize(1280, 800);
+    assert(hubView.width() == 1280);
 
     // 7. Vector icon test for Home
     QPixmap homeIcon = AppIcons::getPixmap(AppIcons::IconType::Home, QColor("#7aa2f7"), 24);
     assert(!homeIcon.isNull() && homeIcon.width() > 0 && homeIcon.height() > 0);
 
-    std::cout << "  ✓ Standalone sheets, system isolation & Home Hub modal verified!" << std::endl;
+    std::cout << "  ✓ Standalone sheets, system isolation & Full-Screen Home Hub view verified!" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
