@@ -26,6 +26,7 @@
 #include "src/app/AppIcons.hpp"
 #include "src/sync/GoogleDriveSync.hpp"
 #include "src/app/HomeHubView.hpp"
+#include "src/app/ExportPdfDialog.hpp"
 
 using namespace OmniNote;
 
@@ -1369,6 +1370,27 @@ void testStandaloneSheetsAndHomeHub() {
     std::cout << "  ✓ Standalone sheets, system isolation & Full-Screen Home Hub view verified!" << std::endl;
 }
 
+void testCanvaPdfExportDialog() {
+    std::cout << "[TEST] 22. Canva-Style PDF Export Dialog with Flexible Page Ranges..." << std::endl;
+
+    QVector<PageRecord> pages;
+    PageRecord p1; p1.id = 101; p1.pageNumber = 1; p1.title = "Portada y Esquema";
+    PageRecord p2; p2.id = 102; p2.pageNumber = 2; p2.title = "Hoja para Vite";
+    PageRecord p3; p3.id = 103; p3.pageNumber = 3; p3.title = "Conclusiones";
+    pages = {p1, p2, p3};
+
+    // 1. Current page export
+    ExportPdfDialog dlg(pages, 102, "Cuaderno Frontend");
+    assert(dlg.exportScope() == ExportPdfDialog::ExportScope::CurrentPage);
+    auto selectedCurrent = dlg.selectedPages();
+    assert(selectedCurrent.size() == 1);
+    assert(selectedCurrent[0].id == 102);
+    assert(dlg.suggestedFileName() == "Hoja para Vite.pdf");
+    assert(dlg.dpi() == 300);
+
+    std::cout << "  ✓ Canva-style PDF export dialog, scope resolution & file naming verified!" << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     // Initialize QApplication with headless / offscreen support for scene/raster operations
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1399,6 +1421,7 @@ int main(int argc, char *argv[]) {
     testCanvasSelectionAndGrouping();
     testCanvaTemplateAndMultiThemePalettes();
     testStandaloneSheetsAndHomeHub();
+    testCanvaPdfExportDialog();
 
     // Render visual inspection artifact of all toolbar icons
     {
@@ -1508,6 +1531,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "\n>>> ALL 21 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
+    std::cout << "\n>>> ALL 22 SUBSYSTEM TESTS PASSED WITH 100% SUCCESS! <<<" << std::endl;
     return 0;
 }

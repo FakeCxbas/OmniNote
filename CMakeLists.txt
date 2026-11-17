@@ -32,6 +32,8 @@ set(SOURCES
     src/app/MainWindow.cpp
     src/app/HomeHubView.hpp
     src/app/HomeHubView.cpp
+    src/app/ExportPdfDialog.hpp
+    src/app/ExportPdfDialog.cpp
     src/app/ThemeManager.hpp
     src/app/AppIcons.hpp
     src/app/AppIcons.cpp
@@ -153,6 +155,7 @@ set(TEST_SOURCES
     src/pdf/PdfManager.cpp
     src/sync/GoogleDriveSync.cpp
     src/app/HomeHubView.cpp
+    src/app/ExportPdfDialog.cpp
     assets/icons.qrc
 )
 
