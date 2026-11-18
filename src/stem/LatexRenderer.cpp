@@ -8,6 +8,7 @@
 #include <QTextDocument>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QDebug>
 
 namespace OmniNote {
@@ -23,12 +24,12 @@ LatexRenderer::LatexRenderer() {
         QCoreApplication::applicationDirPath() + "/render_latex.py",
         QCoreApplication::applicationDirPath() + "/../src/stem/render_latex.py",
         QDir::currentPath() + "/src/stem/render_latex.py",
-        "/home/fakecxbas/Proyectos/Apuntes/src/stem/render_latex.py",
-        "/home/fakecxbas/.local/bin/render_latex.py"
+        QStandardPaths::locate(QStandardPaths::ApplicationsLocation, "render_latex.py"),
+        QStandardPaths::locate(QStandardPaths::AppDataLocation, "render_latex.py")
     };
 
     for (const auto &path : candidates) {
-        if (QFileInfo::exists(path)) {
+        if (!path.isEmpty() && QFileInfo::exists(path)) {
             m_scriptPath = QFileInfo(path).canonicalFilePath();
             break;
         }
@@ -61,7 +62,13 @@ bool LatexRenderer::ensureWorkerStarted() {
         m_worker->waitForFinished(500);
     }
 
-    m_worker->setProgram("python3");
+    QString pythonCmd = "python3";
+#ifdef Q_OS_WIN
+    if (QStandardPaths::findExecutable("python3").isEmpty() && !QStandardPaths::findExecutable("python").isEmpty()) {
+        pythonCmd = "python";
+    }
+#endif
+    m_worker->setProgram(pythonCmd);
     m_worker->setArguments({"-u", m_scriptPath});
     m_worker->start();
 
