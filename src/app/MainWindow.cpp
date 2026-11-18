@@ -1327,9 +1327,11 @@ void MainWindow::switchPage(qint64 pageId) {
                         m_pdfManager.loadDocument(p.pdfPath);
                     }
                     if (m_pdfManager.isLoaded()) {
-                        QImage img = m_pdfManager.renderPage(p.pdfPage, 150.0);
+                        QImage img = m_pdfManager.renderPage(p.pdfPage, 300.0);
                         if (!img.isNull()) {
-                            m_currentScene->setPageSize(img.width(), img.height());
+                            if (p.width <= 0 || p.height <= 0) {
+                                m_currentScene->setPageSize(img.width(), img.height());
+                            }
                             m_currentScene->setPdfBackground(img, p.pdfPage);
                         }
                     }
@@ -1831,9 +1833,11 @@ std::unique_ptr<VectorCanvasScene> MainWindow::createSceneForPage(const PageReco
             m_pdfManager.loadDocument(p.pdfPath);
         }
         if (m_pdfManager.isLoaded()) {
-            QImage img = m_pdfManager.renderPage(p.pdfPage, 150.0);
+            QImage img = m_pdfManager.renderPage(p.pdfPage, 300.0);
             if (!img.isNull()) {
-                scene->setPageSize(img.width(), img.height());
+                if (p.width <= 0 || p.height <= 0) {
+                    scene->setPageSize(img.width(), img.height());
+                }
                 scene->setPdfBackground(img, p.pdfPage);
             }
         }
