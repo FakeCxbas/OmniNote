@@ -149,7 +149,7 @@ void VectorCanvasScene::setHeaderTitle(const QString &title) {
 }
 
 QRectF VectorCanvasScene::headerTitleRect() const {
-    if (m_bgType != BackgroundType::CanvaGrid) {
+    if (m_bgType != BackgroundType::CanvaGrid || !m_pdfImage.isNull()) {
         return QRectF();
     }
     const qreal marginL = 80.0;
@@ -859,11 +859,15 @@ void VectorCanvasScene::drawBackground(QPainter *painter, const QRectF &rect) {
         painter->fillRect(visibleSheet, sheetColor());
 
         if (!m_pdfImage.isNull()) {
+            painter->save();
+            painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+            painter->setRenderHint(QPainter::Antialiasing, true);
             painter->drawImage(sheet, m_pdfImage);
+            painter->restore();
+        } else {
+            // 4. Pure Vector Grid & Typography (infinite resolution, SVG quality at any zoom level)
+            renderGridToPainter(painter, visibleSheet);
         }
-
-        // 4. Pure Vector Grid & Typography (infinite resolution, SVG quality at any zoom level)
-        renderGridToPainter(painter, visibleSheet);
     }
 
     // 5. Crisp Sheet Border so the user clearly sees the page limits

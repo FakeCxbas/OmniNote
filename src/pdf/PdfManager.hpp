@@ -23,7 +23,7 @@ public:
     int pageCount() const;
 
     QSizeF pageSize(int pageIndex) const;
-    QImage renderPage(int pageIndex, double dpi = 150.0);
+    QImage renderPage(int pageIndex, double dpi = 300.0);
 
     // High-resolution vector PDF notebook export using QPdfWriter
     static bool exportNotebookToPdf(const QString &outputPath,
