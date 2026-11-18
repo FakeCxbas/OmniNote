@@ -412,7 +412,7 @@ void VectorCanvasView::mousePressEvent(QMouseEvent *event) {
     m_simulatedPressure = initialPressure;
 
     // Stylus Barrel Button 1 (or Right Click): Momentary Eraser
-    if (event->button() == Qt::RightButton && m_canvasScene) {
+    if ((event->button() == Qt::RightButton || event->button() == Qt::ExtraButton1) && m_canvasScene) {
         m_stylusEraserActive = true;
         m_preStylusTool = m_canvasScene->currentTool();
         viewport()->setCursor(CanvasCursorFactory::createEraserCursor());
@@ -550,7 +550,7 @@ void VectorCanvasView::mouseMoveEvent(QMouseEvent *event) {
             currentPressure = m_simulatedPressure;
         }
 
-        bool isEraser = m_stylusEraserActive || (event->buttons() & Qt::RightButton);
+        bool isEraser = m_stylusEraserActive || (event->buttons() & (Qt::RightButton | Qt::ExtraButton1));
         m_canvasScene->handlePointerMove(scenePos, currentPressure, 0.0, 0.0, isEraser);
         emit pressureChanged(currentPressure);
         if (!m_canvasScene->selectedItems().isEmpty()) {
@@ -583,13 +583,8 @@ void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
         return;
     }
 
-    // Guard against duplicate synthetic mouse release events during tablet usage
-    if (m_isTabletStroke || event->source() == Qt::MouseEventSynthesizedBySystem) {
-        event->accept();
-        return;
-    }
-
-    if (m_stylusEraserActive && (event->button() == Qt::RightButton || event->buttons() == Qt::NoButton)) {
+    // Always properly release momentary stylus eraser or lasso first, even if event is marked as synthetic
+    if (m_stylusEraserActive && (event->button() == Qt::RightButton || event->button() == Qt::ExtraButton1 || event->buttons() == Qt::NoButton || !(event->buttons() & (Qt::RightButton | Qt::ExtraButton1)))) {
         m_stylusEraserActive = false;
         if (m_canvasScene) {
             QPointF scenePos = mapToSceneF(event->position());
@@ -601,7 +596,7 @@ void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
         return;
     }
 
-    if (m_stylusLassoActive && (event->button() == Qt::MiddleButton || event->buttons() == Qt::NoButton)) {
+    if (m_stylusLassoActive && (event->button() == Qt::MiddleButton || event->button() == Qt::ExtraButton2 || event->buttons() == Qt::NoButton || !(event->buttons() & (Qt::MiddleButton | Qt::ExtraButton2)))) {
         m_stylusLassoActive = false;
         if (m_canvasScene) {
             QPointF scenePos = mapToSceneF(event->position());
@@ -610,6 +605,12 @@ void VectorCanvasView::mouseReleaseEvent(QMouseEvent *event) {
         }
         updateToolCursor();
         emit pressureChanged(0.0);
+        event->accept();
+        return;
+    }
+
+    // Guard against duplicate synthetic mouse release events during active native tablet stroke
+    if (m_isTabletStroke) {
         event->accept();
         return;
     }
@@ -641,22 +642,26 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
 
     bool isEraser = false;
     const auto *dev = event->pointingDevice();
-    if (dev && dev->pointerType() == QPointingDevice::PointerType::Eraser) {
+    if ((dev && dev->pointerType() == QPointingDevice::PointerType::Eraser) ||
+        (event->pointerType() == QPointingDevice::PointerType::Eraser)) {
         isEraser = true;
     }
 
     // Stylus Barrel Buttons:
-    // Button 1 (lower button / right click) -> momentary eraser
-    if (event->buttons() & Qt::RightButton) {
+    // Button 1 (lower button / right click / extra button 1) -> momentary eraser
+    if ((event->buttons() & (Qt::RightButton | Qt::ExtraButton1)) ||
+        (event->button() == Qt::RightButton || event->button() == Qt::ExtraButton1) ||
+        m_stylusEraserActive) {
         isEraser = true;
     }
 
-    // Button 2 (upper button / middle click) -> momentary lasso
-    if ((event->buttons() & Qt::MiddleButton) && !m_stylusLassoActive) {
+    // Button 2 (upper button / middle click / extra button 2) -> momentary lasso
+    if (((event->buttons() & (Qt::MiddleButton | Qt::ExtraButton2)) ||
+         (event->button() == Qt::MiddleButton || event->button() == Qt::ExtraButton2)) && !m_stylusLassoActive) {
         m_stylusLassoActive = true;
         m_preStylusTool = m_canvasScene->currentTool();
         m_canvasScene->setCurrentTool(ToolType::Lasso);
-    } else if (!(event->buttons() & Qt::MiddleButton) && m_stylusLassoActive) {
+    } else if (!(event->buttons() & (Qt::MiddleButton | Qt::ExtraButton2)) && m_stylusLassoActive) {
         m_stylusLassoActive = false;
         m_canvasScene->setCurrentTool(m_preStylusTool);
     }
@@ -756,10 +761,14 @@ void VectorCanvasView::tabletEvent(QTabletEvent *event) {
             m_canvasScene->handlePointerRelease(scenePos, 0.0, tx, ty, isEraser);
             updateSelectionActionBarPosition();
         }
-        if (m_stylusLassoActive && !(event->buttons() & Qt::MiddleButton)) {
+        if (m_stylusEraserActive && !(event->buttons() & (Qt::RightButton | Qt::ExtraButton1))) {
+            m_stylusEraserActive = false;
+        }
+        if (m_stylusLassoActive && !(event->buttons() & (Qt::MiddleButton | Qt::ExtraButton2))) {
             m_stylusLassoActive = false;
             m_canvasScene->setCurrentTool(m_preStylusTool);
         }
+        updateToolCursor();
         emit pressureChanged(0.0);
         updateSelectionActionBarPosition();
         event->accept();
