@@ -111,6 +111,12 @@ set_target_properties(OmniNoteSTEM PROPERTIES
     OUTPUT_NAME omninote
 )
 
+if (WIN32)
+    set_target_properties(OmniNoteSTEM PROPERTIES
+        WIN32_EXECUTABLE TRUE
+    )
+endif()
+
 # Desktop Deployment & Installation Rules
 install(TARGETS OmniNoteSTEM
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -120,19 +126,21 @@ install(PROGRAMS src/stem/render_latex.py
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(FILES assets/org.omninote.OmniNote.desktop
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
-)
-
-install(FILES assets/icons/org.omninote.OmniNote.svg
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-)
-
-foreach(size 16 24 32 48 64 128 256 512)
-    install(FILES assets/icons/hicolor/${size}x${size}/apps/org.omninote.OmniNote.png
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
+if (NOT WIN32)
+    install(FILES assets/org.omninote.OmniNote.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
     )
-endforeach()
+
+    install(FILES assets/icons/org.omninote.OmniNote.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+    )
+
+    foreach(size 16 24 32 48 64 128 256 512)
+        install(FILES assets/icons/hicolor/${size}x${size}/apps/org.omninote.OmniNote.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
+        )
+    endforeach()
+endif()
 
 # Automated Subsystem Test Suite
 set(TEST_SOURCES

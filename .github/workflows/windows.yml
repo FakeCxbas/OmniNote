@@ -1,0 +1,64 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build & Package Windows x64 (.exe)
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 Environment
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-svg
+            mingw-w64-x86_64-qt6-tools
+            mingw-w64-x86_64-poppler-qt6
+            mingw-w64-x86_64-sqlite3
+            mingw-w64-x86_64-ntldd
+
+      - name: Run Test Suite (Offscreen)
+        run: |
+          cmake -B build-tests -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-tests --target test_omninote --config Release
+          export QT_QPA_PLATFORM=offscreen
+          ./build-tests/test_omninote.exe
+
+      - name: Compile & Package Windows Executable
+        run: |
+          bash packaging/windows/build_windows_msys2.sh
+
+      - name: Upload Windows Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omninote-windows-x64
+          path: omninote-windows-x64.zip
+          retention-days: 14
