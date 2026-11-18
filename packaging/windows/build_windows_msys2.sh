@@ -49,11 +49,11 @@ if command -v ntldd >/dev/null 2>&1; then
     for pass in 1 2 3; do
         for bin in "${DIST_DIR}"/*.exe "${DIST_DIR}"/*.dll; do
             if [ -f "${bin}" ]; then
-                ntldd -R "${bin}" 2>/dev/null | grep "/mingw64/bin" | awk '{print $3}' | while read -r dll; do
-                    if [ -f "${dll}" ]; then
+                ntldd -R "${bin}" 2>/dev/null | awk '/\/mingw64\/bin/ {print $3}' | while read -r dll || [ -n "${dll}" ]; do
+                    if [ -n "${dll}" ] && [ -f "${dll}" ]; then
                         dest="${DIST_DIR}/$(basename "${dll}")"
                         if [ ! -f "${dest}" ]; then
-                            cp "${dll}" "${dest}"
+                            cp "${dll}" "${dest}" || true
                         fi
                     fi
                 done
