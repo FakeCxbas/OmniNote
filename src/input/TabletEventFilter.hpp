@@ -81,6 +81,11 @@ protected:
         case QEvent::MouseMove:
         case QEvent::MouseButtonRelease: {
             auto *me = static_cast<QMouseEvent *>(event);
+            // Never suppress barrel button clicks (RightButton/MiddleButton) used for eraser and lasso
+            if (me->button() == Qt::RightButton || me->button() == Qt::MiddleButton ||
+                (me->buttons() & (Qt::RightButton | Qt::MiddleButton))) {
+                break;
+            }
             if (m_inProximity && m_currentPressure > 0.05 && me->source() == Qt::MouseEventSynthesizedBySystem) {
                 event->accept();
                 return true;

@@ -339,10 +339,25 @@ void VectorCanvasScene::handlePointerPress(const QPointF &scenePos, qreal pressu
     update(m_activeStrokeItem->boundingRect().adjusted(-12, -12, 12, 12));
 }
 
-void VectorCanvasScene::handlePointerMove(const QPointF &scenePos, qreal pressure, qreal tx, qreal ty, bool /*isEraser*/) {
+void VectorCanvasScene::handlePointerMove(const QPointF &scenePos, qreal pressure, qreal tx, qreal ty, bool isEraser) {
     emit cursorMoved(scenePos);
 
     const QPointF clampedPos = clampToPage(scenePos, qMax(2.0, m_currentBaseWidth * 0.5));
+
+    // Dynamic transition to eraser if barrel button is pressed mid-stroke
+    if (isEraser && !m_isErasing) {
+        if (m_isDrawing && m_activeStrokeItem) {
+            removeItem(m_activeStrokeItem);
+            delete m_activeStrokeItem;
+            m_activeStrokeItem = nullptr;
+            m_isDrawing = false;
+            m_activePoints.clear();
+        }
+        m_isErasing = true;
+        m_lastEraserPos = clampedPos;
+    } else if (!isEraser && m_isErasing && m_currentTool != ToolType::Eraser) {
+        m_isErasing = false;
+    }
 
     if (m_isErasing) {
         qreal dist = std::hypot(clampedPos.x() - m_lastEraserPos.x(), clampedPos.y() - m_lastEraserPos.y());
