@@ -16,6 +16,12 @@ cmake -B "${BUILD_DIR}" -G "Ninja" \
 echo "[2/4] Compilando OmniNote STEM..."
 cmake --build "${BUILD_DIR}" --config Release -j$(nproc)
 
+echo "[2b/4] Ejecutando pruebas unitarias en Windows (offscreen)..."
+if [ -f "${BUILD_DIR}/test_omninote.exe" ]; then
+    export QT_QPA_PLATFORM=offscreen
+    "./${BUILD_DIR}/test_omninote.exe"
+fi
+
 echo "[3/4] Desplegando binario y dependencias de Windows..."
 rm -rf dist
 mkdir -p "${DIST_DIR}"

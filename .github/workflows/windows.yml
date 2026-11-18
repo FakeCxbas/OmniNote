@@ -30,6 +30,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          suppress-deprecation-warnings: msystem-mingw64
           update: true
           install: >-
             git
@@ -45,14 +46,7 @@ jobs:
             mingw-w64-x86_64-sqlite3
             mingw-w64-x86_64-ntldd
 
-      - name: Run Test Suite (Offscreen)
-        run: |
-          cmake -B build-tests -G "Ninja" -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-tests --target test_omninote --config Release
-          export QT_QPA_PLATFORM=offscreen
-          ./build-tests/test_omninote.exe
-
-      - name: Compile & Package Windows Executable
+      - name: Compile, Test & Package Windows Executable
         run: |
           bash packaging/windows/build_windows_msys2.sh
 
