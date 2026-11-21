@@ -51,7 +51,7 @@ jobs:
           bash packaging/windows/build_windows_msys2.sh
 
       - name: Upload Windows Executable Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omninote-windows-x64
           path: omninote-windows-x64.zip
